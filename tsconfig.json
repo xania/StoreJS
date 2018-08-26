@@ -1,0 +1,19 @@
+{
+    "compileOnSave": true,
+    "compilerOptions": {
+        "lib": [
+            "es2018", "dom"
+        ],
+        "sourceMap": true,
+        "jsx": "react",
+        "baseUrl": "",
+        "paths": {
+            "rxjs": [ "jspm_packages/npm/rxjs@6.2.1" ],
+            "rxjs/*": [ "jspm_packages/npm/rxjs@6.2.1/*" ]
+        }
+    },
+    "include": [
+        "src/*.ts",
+        "src/*.tsx"
+    ]
+}

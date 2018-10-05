@@ -1,0 +1,18 @@
+{
+    "gitlens.advanced.messages": {
+        "suppressShowKeyBindingsNotice": true
+    },
+    "window.zoomLevel": -1,
+    "workbench.colorTheme": "Visual Studio Light",
+    "files.autoSave": "off",
+    "[typescriptreact]": {
+        
+    },
+    "git.autofetch": true,
+    "files.exclude": {
+        // exclude .js and .js.map files, when in a TypeScript project
+        "**/*.js": { "when": "$(basename).ts" },
+        "**/**.js": { "when": "$(basename).tsx" },
+        "**/*.js.map": true
+    }
+}

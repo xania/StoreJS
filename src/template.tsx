@@ -1,82 +1,8 @@
-import { IExpression, IProperty } from "./xania/store"
-import { Binding, DomDriver, IDriver, Element, isPrimitive } from './xania/binding';
-
-interface ITemplate {
-    render<T>(driver: IDriver): Binding;
-    children?: ITemplate[]
-}
-
-function isTemplate(value: any): value is ITemplate {
-    return typeof value['render'] === "function"
-}
-
-type Primitive = number | string | boolean;
-
-function asTemplate(item: ITemplate | Primitive | IExpression<Primitive>): ITemplate {
-    if (isTemplate(item))
-        return item;
-    else
-        return new TextTemplate(item);
-}
-
-function tpl(name: string, attributes: any[], ...children: ITemplate[]): ITemplate {
-    console.log(children);
-
-    return new TagTemplate(name, null, children.map(asTemplate))
-}
-
-export function compile<T>(fn: (input: T) => ITemplate): (input: T) => Binding {
-    return (input: T) => {
-        const rootTpl = fn(input);
-        let rootBinding = rootTpl.render<Element>(new DomDriver(document.body));
-        const stack = [ { binding: rootBinding, tpl: rootTpl }];
-
-        while(stack.length) {
-            const { tpl, binding } = stack.pop();
-
-            if (tpl.children) {
-                let childDriver = binding.driver();
-                for(let i=0 ;i<tpl.children.length ; i++) {
-                    let child = tpl.children[i];
-                    let childBinding = child.render(childDriver);
-                    if (child.children) {
-                        stack.push( { tpl: child, binding: childBinding } );
-                    }
-                }
-            }
-        }
-
-        return rootBinding;
-    }
-}
-
-class TextTemplate implements ITemplate {
-    constructor(public value: Primitive | IExpression<Primitive>) {
-    }
-
-    render(driver: IDriver): Binding {
-        let { value } = this;
-
-        if (isPrimitive(value)) {
-            return driver.createText(value);
-        }
-        else {
-            let expr = value;
-            let textElement = driver.createText(expr.value);
-            expr.subscribe(textElement);
-            return textElement;
-        }
-    }
-}
-
-class TagTemplate implements ITemplate {
-    constructor(public name: string, attrs, public children: ITemplate[]) {
-    }
-
-    render(driver:IDriver) {
-        return driver.createElement(this.name);
-    }
-}
+import { IExpression } from "./xania/store"
+import { ITemplate, Binding } from './xania/index';
+import { tpl } from "./xania"
+import { Fragment } from "./xania/elements/fragment"
+import { List } from "./xania/elements/list"
 
 export class Address {
     public street?: string;
@@ -96,30 +22,55 @@ export class Person {
 export function personTemplate(person: IExpression<Person>): ITemplate {
     return (
         <div>
-            {person.property("id")} 
+            {person.property("id")}
             ::
-            <div class="firstName">
-                {person.property("firstName")}
-            </div>
+            {fullName(person)}
         </div>
     )
 }
 
-export function organisationTemplate(): ITemplate {
+function fullName(person: IExpression<Person>): ITemplate {
     return (
-        <div>
-            organisation
-        </div>
+        <Fragment>
+            <span class="firstName">
+                {person.property("firstName")}
+            </span>
+            &nbsp;
+            <span class="lastName">
+                Ben Salah
+            </span>
+        </Fragment>
     )
 }
 
-// export function personTemplate(person: IExpression<Person>) {
-//     return Xania.createElement("div", null, 
-//         Xania.createElement("span", null,
-//             person.property("id"),
-//             " :: ",
-//             person.property("firstName")
-//         )
-//     )
-// }
+export function organisationTemplate(organisation: IExpression<Organisation>): ITemplate {
+    return (
+        <List source={organisation.property("people")}>
+            { personTemplate }
+        </List>
+    );
+}
 
+// var counter = 3;
+// function view(people: Person[]) {
+
+//     function onChange(p: Person, value: string) {
+//         p.firstName = value;
+//     }
+
+//     return (
+//         <div>
+//             <h1>header ({people.length})</h1>
+//             {
+//                 people.map((p, idx) => (
+//                     <div key={p.id}>
+//                         <input type="text" defaultValue={p.firstName} onChange={evt => onChange(p, evt.target.value)} />
+//                         <a onClick={() => people.splice(idx, 1)}>&times;</a>
+//                         <span>{p.firstName}</span>
+//                     </div>
+//                 ))
+//             }
+//             <button onClick={evt => people.push({ id: ++counter, firstName: `new Item ${counter}` })} >Add</button>
+//         </div>
+//     );
+// }

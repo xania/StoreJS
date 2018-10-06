@@ -5,6 +5,7 @@ type Selector<T, U> = (arg: T, idx?: number) => U;
 type Parent = {}
 
 type Unpack<T> = T extends any[] ? T[number] : T;
+export type ItemOf<T> = Unpack<T>
 
 export interface IExpression<T> {
     value?: T;
@@ -61,6 +62,7 @@ abstract class Value<T> implements IExpression<T> {
 
         var observers = this.observers;
         if (observers) {
+            let length = observers.length;
             observers[length] = observer;
         } else {
             this.observers = [observer];
@@ -143,7 +145,7 @@ export class Iterator<T> {
     //     return iteration;
     // }
 
-    map(select: Selector<IExpression<Unpack<T>>, Subscription>) {
+    map(select: Selector<IExpression<Unpack<T>>, Subscription>): any[] {
         var iterations = this.iterations || (this.iterations = []);
         var iteration = new Iteration(select);
         iterations.push(iteration);
@@ -153,6 +155,7 @@ export class Iterator<T> {
         //         iterations.splice(idx, 1);
         //     }
         // } as Subscription
+        return iterations;
     }
 
     refresh(parentValue: T) {

@@ -1,30 +1,4 @@
-import * as Re from "./store"
-
-export interface Binding {
-    driver?(): IDriver;
-    unsubscribe();
-}
-
-export declare type Element = TagElement | TextElement
-
-export interface TagElement {
-    driver(): IDriver;
-    unsubscribe();
-}
-
-export interface TextElement {
-    next(value: Primitive);
-    unsubscribe();
-}
-
-export interface IDriver {
-    createElement(name: string): TagElement;
-    createText(value: any): TextElement;
-}
-
-export function isPrimitive(value: any): value is Primitive {
-    return typeof value === "number" || typeof value === "string" || typeof value === "boolean"
-}
+import { IDriver, Primitive } from "./index"
 
 export class DomDriver implements IDriver {
     private target;
@@ -46,7 +20,7 @@ export class DomDriver implements IDriver {
             driver() {
                 return new DomDriver(tagNode);
             },
-            unsubscribe() {
+            dispose() {
                 tagNode.remove();
             }
         }
@@ -56,21 +30,48 @@ export class DomDriver implements IDriver {
         const textNode: Text = document.createTextNode(value as string);
         this.target.appendChild(textNode);
 
-        // if (isPrimitive(value)) {
-        //     binding = new Binding(() => textNode.nodeValue = value as string, unsubscribe);
-        // }
-        // else {
-        //     var expr = value;
-        //     binding = new Binding(() => textNode.nodeValue = expr.value as string, unsubscribe);
-        //     expr.subscribe(binding);
-        // }
-
         return {
             next(value) {
                 textNode.nodeValue = value as string;
             },
-            unsubscribe() {
+            dispose() {
                 return textNode.remove();
+            }
+        }
+    }
+
+    createAttribute(name: string, value: Primitive) {
+        let { target } = this;
+
+        if (name === "class") {
+            className(value as string);
+            return {
+                next: className,
+                dispose() {
+                    target.removeAttribute(name);
+                }
+            }
+        } else {
+            defaultAttribute(value as string);
+            return {
+                next: defaultAttribute,
+                dispose() {
+                    target.removeAttribute(name);
+                }
+            }
+        }
+
+        function className(value: string) {
+            target.className = value;
+        }
+
+        function defaultAttribute(value: string) {
+            if (value === void 0 || value === null) {
+                target.removeAttribute(name);
+            } else {
+                var attr = document.createAttribute(name);
+                attr.value = value;
+                target.setAttributeNode(attr);
             }
         }
     }
@@ -208,4 +209,3 @@ export class DomDriver implements IDriver {
     // }
 }
 
-type Primitive = string | number | boolean

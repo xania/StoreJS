@@ -2,11 +2,10 @@
   "name": "xania.storejs",
   "version": "0.0.1",
   "description": "Reactive store to bridge between mutable data and observables",
-  "main": "index.js",
-  "repository": "https://github.com/xania/StoreJS",
+  "main": "src/xania.js",
+  "repository": "https://github.com/xania/storejs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "live-server --ignore=**/*.ts,**/*.map",
     "compile": "tsc"
   },
   "author": "Ibrahim ben Salah",

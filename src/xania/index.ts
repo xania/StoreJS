@@ -2,6 +2,7 @@ export interface IDriver {
     createElement(name: string): TagElement;
     createText(value: any): TextElement;
     createAttribute(name: string, value: any): TextElement;
+    createScope(name: string): ScopeElement;
 }
 
 export interface ITemplate {
@@ -9,7 +10,7 @@ export interface ITemplate {
 }
 
 export declare type Props = { [key: string]: any }
-export declare type Element = TagElement | TextElement
+export declare type Element = TagElement | TextElement | ScopeElement
 export type Primitive = string | number | boolean
 
 export function isPrimitive(value: any): value is Primitive {
@@ -26,6 +27,10 @@ export interface TextElement {
     dispose();
 }
 
+export interface ScopeElement {
+    driver(): IDriver;
+    dispose();
+}
 
 export interface Binding {
     children?: ITemplate[];

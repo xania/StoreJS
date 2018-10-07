@@ -15,10 +15,13 @@ class ListTemplate<T> implements ITemplate {
         const { children } = this;
         const childrenLength = children.length;
 
+        const scope = driver.createScope("-- List Boundary --");
+        const scopeDriver = scope.driver();
+
         const subscription = iterator.map(item => {
             for(let i=0 ; i<childrenLength ; i++) {
                 let child = children[i]
-                let binding = renderAll(driver, typeof child === "function" ? child(item) : child);
+                let binding = renderAll(scopeDriver, typeof child === "function" ? child(item) : child);
             }
 
             return {
@@ -28,10 +31,6 @@ class ListTemplate<T> implements ITemplate {
             }
         })
 
-        return {
-            dispose() {
-                throw new Error("List Template dispose(): Not yet implemented");
-            }
-        }
+        return scope;
     }
 }

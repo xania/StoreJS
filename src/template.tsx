@@ -49,6 +49,9 @@ export function organisationTemplate(organisation: IExpression<Organisation>): I
             <List source={organisation.property("people")}>
                 { personTemplate("green") }
             </List>
+            <List source={organisation.property("people")}>
+                { personTemplate("yellow") }
+            </List>
         </Fragment>
     );
 }

@@ -12,6 +12,10 @@ export class DomDriver implements IDriver {
             this.target = target;
     }
 
+    createScope(name: string) {
+        return createScope(this.target, name);
+    }
+
     createElement(name: string) {
         const tagNode = document.createElement(name);
         this.target.appendChild(tagNode);
@@ -209,3 +213,49 @@ export class DomDriver implements IDriver {
     // }
 }
 
+function createScope(target: Node, name: string) {
+    let commentNode = document.createComment(name);
+    target.appendChild(commentNode);
+
+    return {
+        driver(): IDriver {
+            return {
+                createAttribute() {
+                    throw new Error("Not supported")
+                },
+                createElement(name) {
+                    const tagNode = document.createElement(name);
+                    target.insertBefore(tagNode, commentNode);
+            
+                    return {
+                        driver() {
+                            return new DomDriver(tagNode);
+                        },
+                        dispose() {
+                            tagNode.remove();
+                        }
+                    }
+                                },
+                createText(value: Primitive) {
+                    const textNode = document.createTextNode(value as string);
+                    target.insertBefore(textNode, commentNode);
+
+                    return {
+                        next(value) {
+                            textNode.nodeValue = value as string;
+                        },
+                        dispose() {
+                            return textNode.remove();
+                        }
+                    }
+                },
+                createScope() {
+                    throw new Error("Not supported")
+                }
+            }
+        },
+        dispose() {
+
+        }
+    }
+}

@@ -1,7 +1,8 @@
 import { ITemplate, Props, IDriver } from "../index"
+import { asTemplate } from "./index"
 
-export function Fragment(props: Props, children?: ITemplate[]): ITemplate {
-    return new FragmentTemplate(children);
+export function Fragment(props: Props, children?: any[]): ITemplate {
+    return new FragmentTemplate(children.map(asTemplate));
 }
 
 class FragmentTemplate implements ITemplate {

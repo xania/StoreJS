@@ -1,11 +1,9 @@
 type Observer<T> = { next(value?: T): void }
 type Subscription = { unsubscribe() }
-type Action<T> = (arg: T) => any;
 type Selector<T, U> = (arg: T, idx?: number) => U;
 type Parent = {}
 
-type Unpack<T> = T extends any[] ? T[number] : T;
-export type ItemOf<T> = Unpack<T>
+type ItemOf<T> = T extends any[] ? T[number] : T;
 
 export interface IExpression<T> {
     value?: T;
@@ -13,7 +11,7 @@ export interface IExpression<T> {
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
     subscribe(observer: Observer<T>): Subscription;
-    // flatMap<U>(selector: Selector<IExpression<Unpack<T>>, IExpression<U[]>>): IExpression<U[]> ;
+    // flatMap<U>(selector: Selector<IExpression<ItemOf<T>>, IExpression<U[]>>): IExpression<U[]> ;
     // map(action: Action<IExpression<T>>);
     // iterations : Iteration<T, Subscription>[];
     iterator(): Iterator<T>;
@@ -29,7 +27,7 @@ interface IObservable<T> {
     complete();
 }
 
-export function map<T, U>(iterator: Iterator<T>, selector: Selector<IExpression<Unpack<T>>, any>): Iteration<T> {
+export function map<T, U>(iterator: Iterator<T>, selector: Selector<IExpression<ItemOf<T>>, any>): Iteration<T> {
     var iteration = null; // new Iteration(iterator, selector);
 
     // value.subscribe(iterator);
@@ -40,15 +38,13 @@ export function map<T, U>(iterator: Iterator<T>, selector: Selector<IExpression<
     return iteration;
 }
 
-const iterator = Symbol("iterator");
-
 const empty = "";
 abstract class Value<T> implements IExpression<T> {
 
     public properties = [];
     public value?: T;
     public observers: Observer<T>[];
-    public iterations: Iteration<T>[];
+    public iterators: Iterator<T>[] = [];
 
     // map() {
     //     if (!this.iterator)
@@ -109,18 +105,16 @@ abstract class Value<T> implements IExpression<T> {
     }
 
     iterator(): Iterator<T> {
-        var iter = this[iterator];
-        if (!iter) {
-            this[iterator] = iter = new Iterator<T>(this);
-        }
+        let iter = new Iterator<T>(this);
+        this.iterators.push(iter);
         return iter;
     }
 }
 
 class Iteration<T> {
-    constructor(public execute: Selector<IExpression<Unpack<T>>, Subscription>) { }
+    constructor(public execute: Selector<IExpression<ItemOf<T>>, Subscription>) { }
 
-    unsubscribe(item: IExpression<Unpack<T>>) {
+    unsubscribe(item: IExpression<ItemOf<T>>) {
         console.log('unsubscribe item: ', item);
     }
 }
@@ -128,8 +122,8 @@ class Iteration<T> {
 
 
 export class Iterator<T> {
-    public observers: Observer<IExpression<Unpack<T>>>[];
-    public properties: ObjectProperty<Unpack<T>>[] = [];
+    public observers: Observer<IExpression<ItemOf<T>>>[];
+    public properties: ObjectProperty<ItemOf<T>>[] = [];
     public length: number = 0;
     public iterations: Iteration<T>[] = [];
     public value;
@@ -139,13 +133,13 @@ export class Iterator<T> {
     constructor(public parent: IExpression<T>) {
     }
 
-    // map<U>(selector: Selector<IExpression<Unpack<T>>, IExpression<U>>): Iteration<T, U> {
+    // map<U>(selector: Selector<IExpression<ItemOf<T>>, IExpression<U>>): Iteration<T, U> {
     //     var iteration = new Iteration(this, selector);
     //     this.iterations.push(iteration);
     //     return iteration;
     // }
 
-    map(select: Selector<IExpression<Unpack<T>>, Subscription>): any[] {
+    map(select: Selector<IExpression<ItemOf<T>>, Subscription>): any[] {
         var iterations = this.iterations || (this.iterations = []);
         var iteration = new Iteration(select);
         iterations.push(iteration);
@@ -170,7 +164,7 @@ export class Iterator<T> {
 
         if (changed) {
             for (let i = prevLength; i < valueLength; i++) {
-                let item = new ObjectProperty<Unpack<T>>(this, i);
+                let item = new ObjectProperty<ItemOf<T>>(this, i);
                 item[subscrSymbol] = [];
                 properties.push(item);
 
@@ -309,7 +303,7 @@ export class Store<T> extends Value<T> {
     }
 
     public refresh() {
-        var stack: { properties, value }[] = [this];
+        var stack: { properties, value, iterators?}[] = [this];
         var stackLength: number = 1;
         var dirty: IProperty<any>[] = [];
         var dirtyLength: number = 0;
@@ -318,16 +312,18 @@ export class Store<T> extends Value<T> {
             const parent = stack[stackLength];
             const parentValue = parent.value;
 
-            var iter = parent[iterator];
-            if (iter) {
-                if (iter.refresh(parentValue)) {
-                    dirty[dirtyLength] = iter;
-                    dirtyLength = (dirtyLength + 1) | 0;
-                }
-                var iter = parent[iterator];
-                if (iter && iter.properties && iter.properties.length > 0) {
-                    stack[stackLength] = iter;
-                    stackLength = (stackLength + 1) | 0;
+            const iterators = parent.iterators;
+            if (iterators) {
+                for (let i = 0; i < iterators.length; i++) {
+                    const iter = iterators[i];
+                    if (iter.refresh(parentValue)) {
+                        dirty[dirtyLength] = iter;
+                        dirtyLength = (dirtyLength + 1) | 0;
+                    }
+                    if (iter && iter.properties && iter.properties.length > 0) {
+                        stack[stackLength] = iter;
+                        stackLength = (stackLength + 1) | 0;
+                    }
                 }
             }
 

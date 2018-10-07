@@ -35,3 +35,25 @@ export interface Binding {
 
 export declare type PureComponent = (props: Props, children: ITemplate[]) => ITemplate
 
+export function renderAll(driver: IDriver, rootTpl: ITemplate) {
+    const rootBinding = rootTpl.render(driver);
+    const stack = [{ binding: rootBinding, tpl: rootTpl }];
+
+    while (stack.length) {
+        const { tpl, binding } = stack.pop();
+
+        if (!binding.driver)
+            continue;
+
+        const driver = binding.driver();
+        if (binding.children) {
+            for (let i = 0; i < binding.children.length; i++) {
+                let child = binding.children[i];
+                let childBinding = child.render(driver);
+                stack.push({ tpl: child, binding: childBinding });
+            }
+        }
+    }
+
+    return rootBinding;
+}

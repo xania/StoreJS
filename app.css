@@ -2,11 +2,19 @@ body {
     color: brown;
 }
 
-div {
+#app div {
     padding: 10px;
     border: 1px solid gray;
 }
 
 .firstName {
     color: blue;
+}
+
+#app div.green {
+    border: 1px solid green;
+}
+
+#app div.yellow {
+    border: 1px solid blue;
 }

@@ -19,9 +19,9 @@ export class Person {
     public address?: Address = {};
 }
 
-export function personTemplate(person: IExpression<Person>): ITemplate {
-    return (
-        <div>
+export function personTemplate(className: string) {
+    return (person: IExpression<Person>) => (
+        <div class={ className }>
             {person.property("id")}
             ::
             {fullName(person)}
@@ -45,9 +45,11 @@ function fullName(person: IExpression<Person>): ITemplate {
 
 export function organisationTemplate(organisation: IExpression<Organisation>): ITemplate {
     return (
-        <List source={organisation.property("people")}>
-            { personTemplate }
-        </List>
+        <Fragment>
+            <List source={organisation.property("people")}>
+                { personTemplate("green") }
+            </List>
+        </Fragment>
     );
 }
 

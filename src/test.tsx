@@ -1,7 +1,7 @@
 import * as Rx from 'rxjs';
 import * as Re from './xania/store';
 import { Organisation, organisationTemplate } from "./template"
-import { DomDriver } from "./xania/binding"
+import Xania from "./xania"
 
 // export let __hotReload = true
 
@@ -31,9 +31,7 @@ window["model"] = model;
 var store = new Re.Store<Organisation>(model);
 
 export function run(dom) {
-    console.log(organisationTemplate(store).render(new DomDriver(dom)));
-    // store.property("people").iterator().map(compile(personTemplate))
-    // store.property("people").property(0).property("firstName").subscribe({ next: x => console.log(' - ', x) });
+    Xania.render(dom, organisationTemplate(store));
     Rx.interval(0, Rx.animationFrameScheduler).subscribe({
         next() {
             if (store.refresh()) {
@@ -42,4 +40,16 @@ export function run(dom) {
         }
     });
     store.refresh()
+}
+
+window["swap"] = function swap(arr, x, y) {
+    let temp = arr[x];
+    arr[x] = arr[y];
+    arr[y] = temp;
+}
+
+window["insert"] = function insert(arr, x, y) {
+    let temp = arr[x];
+    arr[x] = arr[y];
+    arr[y] = temp;
 }

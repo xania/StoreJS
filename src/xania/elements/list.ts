@@ -1,57 +1,36 @@
-import { ITemplate, IDriver } from "../index"
-import { IExpression, ItemOf } from "../store"
+import { ITemplate, IDriver, renderAll } from "../index"
+import { IExpression } from "../store"
 
 type ListProps<T> = { source: IExpression<T> }
-export function List<T>(props: ListProps<T>, children: ITemplate[]): ITemplate {
-    return new ListTemplate<T>(props, children);
+export function List<T>(props: ListProps<T>, children: any[]): ITemplate {
+    return new ListTemplate<T>(props.source, children);
 }
 
 class ListTemplate<T> implements ITemplate {
-    constructor(public props: ListProps<T>, public children: ITemplate[]) {
+    constructor(public source: IExpression<T>, public children: any[]) {
     }
 
     render(driver: IDriver) {
-        this.props.source.iterator().map(compile(driver, this.children))
+        const iterator = this.source.iterator();
+        const { children } = this;
+        const childrenLength = children.length;
+
+        const subscription = iterator.map(item => {
+            for(let i=0 ; i<childrenLength ; i++) {
+                let child = children[i]
+                let binding = renderAll(driver, typeof child === "function" ? child(item) : child);
+            }
+
+            return {
+                unsubscribe() {
+                    throw new Error("List Template unsubscribe(): Not yet implemented");
+                }
+            }
+        })
+
         return {
             dispose() {
-                throw new Error("dispose(): Not yet implemented");
-            }
-        }
-    }
-}
-
-function compile<T>(driver: IDriver, children: ITemplate[]) {
-    return (input: T) => {
-        for(let n = 0 ; n<children.length ; n++) {
-            const rootTpl = children[n];
-            const rootBinding = rootTpl.render(driver, input);
-            const stack = [{ binding: rootBinding, tpl: rootTpl }];
-
-            while (stack.length) {
-                const { tpl, binding } = stack.pop();
-
-                if (!binding.driver)
-                    continue;
-
-                const driver = binding.driver();
-                if (binding.children) {
-                    for (let i = 0; i < binding.children.length; i++) {
-                        let child = binding.children[i];
-                        let childBinding = child.render(driver);
-                        stack.push({ tpl: child, binding: childBinding });
-                    }
-                }
-                // if (tpl.attributes) {
-                //     for (let i = 0; i < tpl.attributes.length; i++) {
-                //         tpl.attributes[i].render(driver);
-                //     }
-                // }
-            }
-        }
-
-        return {
-            unsubscribe() {
-                // return rootBinding;
+                throw new Error("List Template dispose(): Not yet implemented");
             }
         }
     }

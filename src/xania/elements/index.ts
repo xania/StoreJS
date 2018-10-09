@@ -1,5 +1,5 @@
-import { Binding, ITemplate, Props, IDriver, PureComponent, Primitive, isPrimitive } from '../index';
-import { IExpression } from '../store';
+import { Binding, ITemplate, Props, IDriver, PureComponent, Primitive, isPrimitive } from '../index.js';
+import { IExpression } from '../store.js';
 
 export function tpl(name: string | PureComponent, props: Props, ...children: ITemplate[]): ITemplate {
     if (typeof name === "string") {

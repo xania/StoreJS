@@ -1,5 +1,5 @@
-import { ITemplate, IDriver, renderAll } from "../index"
-import { IExpression } from "../store"
+import { ITemplate, IDriver, renderAll } from "../index.js"
+import { IExpression } from "../store.js"
 
 type ListProps<T> = { source: IExpression<T> }
 export function List<T>(props: ListProps<T>, children: any[]): ITemplate {

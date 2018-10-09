@@ -1,4 +1,4 @@
-import { IDriver, Primitive } from "./index"
+import { IDriver, Primitive } from "./index.js"
 
 export class DomDriver implements IDriver {
     private target;

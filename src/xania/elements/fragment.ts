@@ -1,5 +1,5 @@
-import { ITemplate, Props, IDriver } from "../index"
-import { asTemplate } from "./index"
+import { ITemplate, Props, IDriver } from "../index.js"
+import { asTemplate } from "./index.js"
 
 export function Fragment(props: Props, children?: any[]): ITemplate {
     return new FragmentTemplate(children.map(asTemplate));

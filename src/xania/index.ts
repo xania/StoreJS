@@ -40,7 +40,7 @@ export interface Binding {
 
 export declare type PureComponent = (props: Props, children: ITemplate[]) => ITemplate
 
-export function renderAll(driver: IDriver, rootTpl: ITemplate) {
+export function renderAll(driver: IDriver, rootTpl: ITemplate, idx: number = 0) {
     const rootBinding = rootTpl.render(driver);
     const stack = [{ binding: rootBinding, tpl: rootTpl }];
 

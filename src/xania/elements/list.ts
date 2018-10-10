@@ -18,9 +18,9 @@ class ListTemplate<T> implements ITemplate {
         const scope = driver.createScope("-- List Boundary --");
         const scopeDriver = scope.driver();
 
-        const subscription = iterator.map(item => {
+        const subscription = iterator.map( (item, idx) => {
             for(let i=0 ; i<childrenLength ; i++) {
-                let child = children[i]
+                let child = children[i];
                 let binding = renderAll(scopeDriver, typeof child === "function" ? child(item) : child);
             }
 

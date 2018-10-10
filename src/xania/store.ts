@@ -1,6 +1,6 @@
 type Observer<T> = { next(value?: T): void }
 type Subscription = { unsubscribe() }
-type Selector<T, U> = (arg: T, idx?: number) => U;
+type Selector<T, U> = (arg: T, newIndex?: number, oldIndex?: number) => U;
 type Parent = {}
 
 type ItemOf<T> = T extends any[] ? T[number] : T;
@@ -119,7 +119,14 @@ class Iteration<T> {
     }
 }
 
-
+function findIndex<T>(properties: IProperty<T>[], idx: number, value: T) {
+    for(var i=idx ; i<properties.length ; i++) {
+        if (properties[i].value === value) {
+            return i;
+        }
+    }
+    return false;
+}
 
 export class Iterator<T> {
     public observers: Observer<IExpression<ItemOf<T>>>[];
@@ -159,35 +166,47 @@ export class Iterator<T> {
             properties = this.properties,
             { subscrSymbol } = this;
 
-        this.length = valueLength;
         let changed = valueLength !== prevLength;
-
-        if (changed) {
-            for (let i = prevLength; i < valueLength; i++) {
-                let item = new ObjectProperty<ItemOf<T>>(this, i);
-                item[subscrSymbol] = [];
-                properties.push(item);
-
-                var { iterations } = this;
-                if (iterations) {
-                    for (let e = 0; e < iterations.length; e++) {
-                        let subscription = iterations[e].execute(item);
-                        item[subscrSymbol].push(subscription)
-                    }
+        for(let n = 0; n<valueLength ; n++) {
+            let next = parentValue[n];
+            let propIdx = findIndex<ItemOf<T>>(properties, n, next);
+            if (propIdx !== false) {
+                if (propIdx !== n) {
+                    let prop = properties[propIdx];
+                    properties[propIdx] = properties[n]
+                    properties[n] = prop;
+                    prop.name = n;
+                    properties[propIdx].name = propIdx;
+                    this.notify(prop, n, propIdx)
                 }
-            }
-
-            for (let i = valueLength; i < prevLength; i++) {
-                let item = properties[i];
-                var subscriptions = item[subscrSymbol];
-                for (let e = 0; e < subscriptions.length; e++) {
-                    subscriptions[e].unsubscribe()
-                }
+            } else {
+                let item = new ObjectProperty<ItemOf<T>>(this, n);
+                properties.splice(n, 0, item);
+                this.notify(item, n);
             }
         }
+
+        for (let i = valueLength; i < prevLength; i++) {
+            let item = properties[i];
+            var subscriptions = item[subscrSymbol];
+            for (let e = 0; e < subscriptions.length; e++) {
+                subscriptions[e].unsubscribe()
+            }
+        }
+        this.length = valueLength;
         properties.length = valueLength;
 
         return changed;
+    }
+
+    notify(item: IProperty<ItemOf<T>>, newIndex: number, oldIndex?: number) {
+        var { iterations } = this;
+        if (iterations) {
+            for (let e = 0; e < iterations.length; e++) {
+                let subscription = iterations[e].execute(item, newIndex, oldIndex);
+                // item[subscrSymbol].push(subscription)
+            }
+        }
     }
 
     // next(parentValue: T[]) {

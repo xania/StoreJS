@@ -1,6 +1,9 @@
+import { join } from "path";
+
 type Observer<T> = { next(value?: T): void }
 type Subscription = { unsubscribe() }
-type Selector<T, U> = (arg: T, newIndex?: number, oldIndex?: number) => U;
+type Selector<T, U> = (arg: T, newIndex?: number) => U;
+type MoveHandler = (fromIndex: number, toIndex: number) => any;
 type Parent = {}
 
 type ItemOf<T> = T extends any[] ? T[number] : T;
@@ -112,7 +115,9 @@ abstract class Value<T> implements IExpression<T> {
 }
 
 class Iteration<T> {
-    constructor(public execute: Selector<IExpression<ItemOf<T>>, Subscription>) { }
+    constructor(public execute: Selector<IExpression<ItemOf<T>>, Subscription>, public move: MoveHandler) {
+
+    }
 
     unsubscribe(item: IExpression<ItemOf<T>>) {
         console.log('unsubscribe item: ', item);
@@ -120,9 +125,9 @@ class Iteration<T> {
 }
 
 function findIndex<T>(properties: IProperty<T>[], idx: number, value: T) {
-    for(var i=idx ; i<properties.length ; i++) {
-        if (properties[i].value === value) {
-            return i;
+    for(var m=idx ; m<properties.length ; m++) {
+        if (properties[m].value === value) {
+            return m;
         }
     }
     return false;
@@ -146,9 +151,9 @@ export class Iterator<T> {
     //     return iteration;
     // }
 
-    map(select: Selector<IExpression<ItemOf<T>>, Subscription>): any[] {
+    map(execute: Selector<IExpression<ItemOf<T>>, Subscription>, move: MoveHandler): any[] {
         var iterations = this.iterations || (this.iterations = []);
-        var iteration = new Iteration(select);
+        var iteration = new Iteration(execute, move);
         iterations.push(iteration);
         // return {
         //     unsubscribe() {
@@ -169,20 +174,27 @@ export class Iterator<T> {
         let changed = valueLength !== prevLength;
         for(let n = 0; n<valueLength ; n++) {
             let next = parentValue[n];
-            let propIdx = findIndex<ItemOf<T>>(properties, n, next);
+            let propIdx: false | number = false; // findIndex<ItemOf<T>>(properties, n, next);
+
+            for(var m=n ; m<prevLength ; m++) {
+                if (properties[m].value === next) {
+                    propIdx = m;
+                    break;
+                }
+            }
+            
             if (propIdx !== false) {
                 if (propIdx !== n) {
-                    let prop = properties[propIdx];
-                    properties[propIdx] = properties[n]
-                    properties[n] = prop;
-                    prop.name = n;
-                    properties[propIdx].name = propIdx;
-                    this.notify(prop, n, propIdx)
+                    properties[propIdx].value = properties[n].value;
+                    properties[n].value = next;
+                    this.moveTo(n, propIdx)
+                } else {
+                    properties[n].name = n;
                 }
             } else {
                 let item = new ObjectProperty<ItemOf<T>>(this, n);
                 properties.splice(n, 0, item);
-                this.notify(item, n);
+                this.insertAt(item, n);
             }
         }
 
@@ -199,11 +211,21 @@ export class Iterator<T> {
         return changed;
     }
 
-    notify(item: IProperty<ItemOf<T>>, newIndex: number, oldIndex?: number) {
+    insertAt(item: IProperty<ItemOf<T>>, newIndex: number) {
         var { iterations } = this;
         if (iterations) {
             for (let e = 0; e < iterations.length; e++) {
-                let subscription = iterations[e].execute(item, newIndex, oldIndex);
+                let subscription = iterations[e].execute(item, newIndex);
+                // item[subscrSymbol].push(subscription)
+            }
+        }
+    }
+
+    moveTo(oldIndex: number, newIndex: number) {
+        var { iterations } = this;
+        if (iterations) {
+            for (let e = 0; e < iterations.length; e++) {
+                let subscription = iterations[e].move(newIndex, oldIndex);
                 // item[subscrSymbol].push(subscription)
             }
         }

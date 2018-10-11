@@ -219,14 +219,27 @@ function createScope(target: Node, name: string) {
 
     return {
         driver(): IDriver {
+            const elements = [];
+
+            function insertAt(newElement, index: number) {
+                if (index > elements.length)
+                    throw new Error("wat doe je?");
+                if (elements[index]) {
+                    target.insertBefore(newElement, elements[index]);
+                    elements.splice(index, 0, newElement);
+                } else {
+                    target.insertBefore(newElement, commentNode);
+                    elements[index] = newElement;
+                }
+            }
             return {
                 createAttribute() {
                     throw new Error("Not supported")
                 },
-                createElement(name) {
+                createElement(name, index: number) {
                     const tagNode = document.createElement(name);
-                    target.insertBefore(tagNode, commentNode);
-            
+
+                    insertAt(tagNode, index);
                     return {
                         driver() {
                             return new DomDriver(tagNode);
@@ -235,10 +248,10 @@ function createScope(target: Node, name: string) {
                             tagNode.remove();
                         }
                     }
-                                },
-                createText(value: Primitive) {
+                },
+                createText(value: Primitive, index: number) {
                     const textNode = document.createTextNode(value as string);
-                    target.insertBefore(textNode, commentNode);
+                    insertAt(textNode, index);
 
                     return {
                         next(value) {

@@ -18,10 +18,17 @@ class ListTemplate<T> implements ITemplate {
         const scope = driver.createScope("-- List Boundary --");
         const scopeDriver = scope.driver();
 
-        const subscription = iterator.map( (item, idx) => {
-            for(let i=0 ; i<childrenLength ; i++) {
+        const subscription = iterator.map(insertAt, moveTo);
+
+        return scope;
+
+        function insertAt(item, idx) {
+
+            let offset = idx * childrenLength;
+
+            for(let i=0 ; i<childrenLength ; i++, offset++) {
                 let child = children[i];
-                let binding = renderAll(scopeDriver, typeof child === "function" ? child(item) : child);
+                let binding = renderAll(scopeDriver, typeof child === "function" ? child(item) : child, offset);
             }
 
             return {
@@ -29,8 +36,10 @@ class ListTemplate<T> implements ITemplate {
                     throw new Error("List Template unsubscribe(): Not yet implemented");
                 }
             }
-        })
+        }
 
-        return scope;
+        function moveTo(fromIndex: number, toIndex: number) {
+            console.log({ fromIndex, toIndex });
+        }
     }
 }

@@ -1,6 +1,6 @@
 export interface IDriver {
-    createElement(name: string): TagElement;
-    createText(value: any): TextElement;
+    createElement(name: string, index: number): TagElement;
+    createText(value: any, index: number): TextElement;
     createAttribute(name: string, value: any): TextElement;
     createScope(name: string): ScopeElement;
 }
@@ -41,7 +41,7 @@ export interface Binding {
 export declare type PureComponent = (props: Props, children: ITemplate[]) => ITemplate
 
 export function renderAll(driver: IDriver, rootTpl: ITemplate, idx: number = 0) {
-    const rootBinding = rootTpl.render(driver);
+    const rootBinding = rootTpl.render(driver, idx);
     const stack = [{ binding: rootBinding, tpl: rootTpl }];
 
     while (stack.length) {

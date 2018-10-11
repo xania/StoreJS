@@ -39,9 +39,9 @@ class TagTemplate implements ITemplate {
     constructor(public name: string, public children: ITemplate[]) {
     }
 
-    render(driver: IDriver) {
+    render(driver: IDriver, index: number) {
         let { name } = this;
-        let elt = driver.createElement(name);
+        let elt = driver.createElement(name, index);
         return {
             children: this.children,
             driver() {
@@ -58,15 +58,15 @@ class TextTemplate implements ITemplate {
     constructor(public value: Primitive | IExpression<Primitive>) {
     }
 
-    render(driver: IDriver): Binding {
+    render(driver: IDriver, idx: number): Binding {
         let { value } = this;
 
         if (isPrimitive(value)) {
-            return driver.createText(value);
+            return driver.createText(value, idx);
         }
         else {
             let expr = value;
-            let textElement = driver.createText(expr.value);
+            let textElement = driver.createText(expr.value, idx);
             expr.subscribe(textElement);
             return textElement;
         }

@@ -11,6 +11,8 @@ type ItemOf<T> = T extends any[] ? T[number] : T;
 export interface IExpression<T> {
     value?: T;
     observers?: Observer<T>[];
+    properties?: IProperty<never>[];
+    iterators?: Iterator<T>[];
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
     subscribe(observer: Observer<T>): Subscription;
@@ -30,17 +32,6 @@ interface IObservable<T> {
     complete();
 }
 
-export function map<T, U>(iterator: Iterator<T>, selector: Selector<IExpression<ItemOf<T>>, any>): Iteration<T> {
-    var iteration = null; // new Iteration(iterator, selector);
-
-    // value.subscribe(iterator);
-    // if (!value.iterations) {
-    //     value.iterations = [];
-    // }
-    // value.iterations.push(iteration);
-    return iteration;
-}
-
 const empty = "";
 abstract class Value<T> implements IExpression<T> {
 
@@ -48,12 +39,6 @@ abstract class Value<T> implements IExpression<T> {
     public value?: T;
     public observers: Observer<T>[];
     public iterators: Iterator<T>[] = [];
-
-    // map() {
-    //     if (!this.iterator)
-    //         this.iterator = new Iterator(this);
-    //     return this.iterator;
-    // }
 
     subscribe(observer: Observer<T>): Subscription {
         if (this.value !== void 0)
@@ -125,7 +110,7 @@ class Iteration<T> {
 }
 
 function findIndex<T>(properties: IProperty<T>[], idx: number, value: T) {
-    for(var m=idx ; m<properties.length ; m++) {
+    for (var m = idx; m < properties.length; m++) {
         if (properties[m].value === value) {
             return m;
         }
@@ -134,7 +119,7 @@ function findIndex<T>(properties: IProperty<T>[], idx: number, value: T) {
 }
 
 export class Iterator<T> {
-    public observers: Observer<IExpression<ItemOf<T>>>[];
+    // public observers: Observer<IExpression<ItemOf<T>>>[];
     public properties: ObjectProperty<ItemOf<T>>[] = [];
     public length: number = 0;
     public iterations: Iteration<T>[] = [];
@@ -145,44 +130,43 @@ export class Iterator<T> {
     constructor(public parent: IExpression<T>) {
     }
 
-    // map<U>(selector: Selector<IExpression<ItemOf<T>>, IExpression<U>>): Iteration<T, U> {
-    //     var iteration = new Iteration(this, selector);
-    //     this.iterations.push(iteration);
-    //     return iteration;
-    // }
+    get propertyObservers() {
+        const { subscrSymbol } = this;
+
+        let result = [];
+        for(let prop of this.properties) {
+            result.push.apply(result, prop[subscrSymbol])
+        }
+
+        return result;
+    }
 
     map(execute: Selector<IExpression<ItemOf<T>>, Subscription>, move: MoveHandler): any[] {
         var iterations = this.iterations || (this.iterations = []);
         var iteration = new Iteration(execute, move);
         iterations.push(iteration);
-        // return {
-        //     unsubscribe() {
-        //         var idx = iterations.indexOf(iteration);
-        //         iterations.splice(idx, 1);
-        //     }
-        // } as Subscription
         return iterations;
     }
 
     refresh(parentValue: T) {
         this.value = parentValue;
-        const valueLength = parentValue['length'],
+        let valueLength = parentValue['length'],
             prevLength = this.length,
             properties = this.properties,
             { subscrSymbol } = this;
 
         let changed = valueLength !== prevLength;
-        for(let n = 0; n<valueLength ; n++) {
+        for (let n = 0; n < valueLength; n++) {
             let next = parentValue[n];
             let propIdx: false | number = false; // findIndex<ItemOf<T>>(properties, n, next);
 
-            for(var m=n ; m<prevLength ; m++) {
+            for (var m = n; m < prevLength; m++) {
                 if (properties[m].value === next) {
                     propIdx = m;
                     break;
                 }
             }
-            
+
             if (propIdx !== false) {
                 if (propIdx !== n) {
                     properties[propIdx].value = properties[n].value;
@@ -193,8 +177,10 @@ export class Iterator<T> {
                 }
             } else {
                 let item = new ObjectProperty<ItemOf<T>>(this, n);
+                item[subscrSymbol] = [];
                 properties.splice(n, 0, item);
                 this.insertAt(item, n);
+                prevLength++;
             }
         }
 
@@ -212,11 +198,11 @@ export class Iterator<T> {
     }
 
     insertAt(item: IProperty<ItemOf<T>>, newIndex: number) {
-        var { iterations } = this;
+        var { iterations, subscrSymbol } = this;
         if (iterations) {
             for (let e = 0; e < iterations.length; e++) {
                 let subscription = iterations[e].execute(item, newIndex);
-                // item[subscrSymbol].push(subscription)
+                item[subscrSymbol].push(subscription);
             }
         }
     }
@@ -230,65 +216,7 @@ export class Iterator<T> {
             }
         }
     }
-
-    // next(parentValue: T[]) {
-    //     if (!Array.isArray(parentValue))
-    //         throw Error("Not an array!");
-
-    //     this.parentValue = parentValue;
-
-    //     const valueLength = parentValue.length,
-    //         prevLength = this.length;
-
-    //     this.length = valueLength;
-    //     let changed = valueLength !== prevLength;
-    //     const propertyLength = properties.length;
-
-    //     for (let i = 0; i < valueLength; i++) {
-    //         if (i < propertyLength) {
-    //             // let item = properties[i];
-    //             // if (item.value !== value) {
-    //             //     item.value = value;
-    //             //     changed = true;
-    //             // }
-    //         }
-    //         else {
-    //             var item = this.parent.property(i);
-    //             properties.push(item);
-    //             changed = true;
-
-    //             // for(var e=0 ; e<this.iterations.length; e++) {
-    //             //     var iter = this.iterations[e];
-    //             //     iter.selector(item);
-    //             // }
-    //         }
-    //     }
-    //     properties.length = valueLength;
-    // }
 }
-
-// class ArrayItem<T> {
-//     public value;
-
-//     constructor(public name: number) {
-//     }
-
-//     refresh(parentValue) {
-//         var name = this.name,
-//             newValue = parentValue ? parentValue[name] : void 0;
-
-//         if (newValue !== this.value) {
-//             this.value = newValue;
-
-//             // if (newValue === void 0 || newValue === null)
-//             //     this.properties.length = 0;
-
-//             return true;
-//         }
-//         return false;
-//     }
-// }
-
 
 class ObjectProperty<T> extends Value<T> implements IProperty<T> {
     constructor(protected parent: Parent, public name) {

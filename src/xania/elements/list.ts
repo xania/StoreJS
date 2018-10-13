@@ -25,15 +25,19 @@ class ListTemplate<T> implements ITemplate {
         function insertAt(item, idx) {
 
             let offset = idx * childrenLength;
+            const bindings = [];
 
             for(let i=0 ; i<childrenLength ; i++, offset++) {
                 let child = children[i];
                 let binding = renderAll(scopeDriver, typeof child === "function" ? child(item) : child, offset);
+                bindings.push(binding);
             }
 
             return {
                 unsubscribe() {
-                    throw new Error("List Template unsubscribe(): Not yet implemented");
+                    for(let n=0 ; n<bindings.length ; n++) {
+                        bindings[n].dispose();
+                    }
                 }
             }
         }

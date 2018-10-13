@@ -238,14 +238,18 @@ function createScope(target: Node, name: string) {
                 },
                 createElement(name, index: number) {
                     const tagNode = document.createElement(name);
-
                     insertAt(tagNode, index);
+
                     return {
                         driver() {
                             return new DomDriver(tagNode);
                         },
                         dispose() {
-                            tagNode.remove();
+                            let idx = elements.indexOf(tagNode);
+                            if (idx >= 0)
+                                elements.splice(idx, 1);
+                            
+                            return tagNode.remove();
                         }
                     }
                 },
@@ -258,6 +262,10 @@ function createScope(target: Node, name: string) {
                             textNode.nodeValue = value as string;
                         },
                         dispose() {
+                            let idx = elements.indexOf(textNode);
+                            if (idx >= 0)
+                                elements.splice(idx, 1);
+                            
                             return textNode.remove();
                         }
                     }

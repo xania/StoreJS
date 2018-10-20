@@ -3,7 +3,7 @@ export { tpl } from "./xania/elements/index.js"
 import { DomDriver } from "./xania/binding.js"
 
 export default { 
-    render(dom, template: ITemplate) {
+    render(dom : HTMLElement, template: ITemplate) {
         return renderAll(new DomDriver(dom), template);
     }
 }

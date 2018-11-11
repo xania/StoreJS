@@ -13,8 +13,19 @@ export function attributes(props: Props) {
     return props && Object.keys(props).map(key => new Attribute(key, props[key]))
 }
 
+const __emptyTemplate: ITemplate = {
+    render(){
+        return {
+            dispose() {}
+        } as Binding
+    }
+}
+
 export function asTemplate(item: any): ITemplate {
-    if (isTemplate(item))
+    if (typeof item === "undefined" || item === null) {
+        return __emptyTemplate;
+    }
+    else if (isTemplate(item))
         return item;
     else if (typeof item  === "function") {
         return functionAsTemplate(item);

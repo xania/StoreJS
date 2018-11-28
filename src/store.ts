@@ -2,7 +2,9 @@ type Observer<T> = { next(value?: T): void }
 type Subscription = { unsubscribe() }
 type Selector<T, U> = (arg: T, newIndex?: number) => U;
 type MoveHandler = (fromIndex: number, toIndex: number) => any;
-type Parent = {}
+type Parent = {
+    set(path: (number | string)[], value): boolean;
+}
 
 type ItemOf<T> = T extends any[] ? T[number] : T;
 
@@ -21,8 +23,8 @@ export interface IExpression<T> {
 }
 
 export interface IProperty<T> extends IExpression<T> {
-    name: string;
-    // update(value: T);
+    name: string | number;
+    update(value: T): boolean;
 }
 
 interface IObservable<T> {
@@ -67,7 +69,7 @@ abstract class Value<T> implements IExpression<T> {
                 return prop;
             }
         }
-        const property = new ObjectProperty<T[K]>(this, propertyName);
+        const property = new ObjectProperty<T[K]>(this, propertyName as string);
         properties.push(property);
         return property;
     }
@@ -82,12 +84,8 @@ abstract class Value<T> implements IExpression<T> {
             return value.toString();
     }
 
-    set(name, value) {
-        if (this.value[name] !== value) {
-            this.value[name] = value;
-            return true;
-        }
-        return false;
+    set(path: (number | string)[], value): boolean {
+        throw new Error("Not supported");
     }
 
     iterator(): Iterator<T> {
@@ -132,7 +130,7 @@ export class Iterator<T> {
         const { subscrSymbol } = this;
 
         let result = [];
-        for(let prop of this.properties) {
+        for (let prop of this.properties) {
             result.push.apply(result, prop[subscrSymbol])
         }
 
@@ -195,6 +193,10 @@ export class Iterator<T> {
         return changed;
     }
 
+    set(path: string[], value): boolean {
+        throw new Error("Not supported");
+    }
+
     insertAt(item: IProperty<ItemOf<T>>, newIndex: number) {
         var { iterations, subscrSymbol } = this;
         if (iterations) {
@@ -217,7 +219,7 @@ export class Iterator<T> {
 }
 
 class ObjectProperty<T> extends Value<T> implements IProperty<T> {
-    constructor(protected parent: Parent, public name) {
+    constructor(protected parent: Parent, public name: string | number) {
         super();
     }
 
@@ -239,10 +241,19 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
         }
         return false;
     }
+
+    update(value: T) {
+        return this.parent.set([this.name], value);
+    }
+
+    set(path: string[], value): boolean {
+        this.parent.set([this.name, ...path], value);
+        return false;
+    }
 }
 
 export class Store<T> extends Value<T> {
-    constructor(public value) {
+    constructor(public value: T) {
         super();
     }
 
@@ -266,7 +277,25 @@ export class Store<T> extends Value<T> {
     }
 
     update(value: T) {
-        throw new Error("")
+        this.value = value;
+    }
+
+    set(path: (number | string)[], value): boolean {
+        if (path.length === 0)
+            return false;
+
+        var obj = this.value || (this.value = {} as T);
+        for(var i=0 ; i<path.length-1 ; i++) {
+            var name = path[i];
+            obj = obj[name] || (obj[name] = {})
+        }
+        const last = path[path.length - 1];
+
+        if (obj[last] !== value) {
+            obj[last] = value;
+        }
+
+        return this.refresh() > 0;
     }
 
     public refresh() {

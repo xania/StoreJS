@@ -70,6 +70,7 @@ abstract class Value<T> implements IExpression<T> {
             }
         }
         const property = new ObjectProperty<T[K]>(this, propertyName as string);
+        property.refresh(this.value);
         properties.push(property);
         return property;
     }

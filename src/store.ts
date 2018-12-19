@@ -5,6 +5,8 @@ type MoveHandler = (fromIndex: number, toIndex: number) => any;
 type Parent = {
     set(path: (number | string)[], value): boolean;
 }
+type Action<T> = (value: T) => void;
+
 export interface NextObserver<T> {
     next: (value: T) => void;
 }
@@ -18,6 +20,8 @@ export interface IExpression<T> {
     iterators?: Iterator<T>[];
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
+
+    subscribe(next: (value: T) => void): Unsubscribable;
     subscribe(observer: NextObserver<T>): Unsubscribable;
     // flatMap<U>(selector: Selector<IExpression<ItemOf<T>>, IExpression<U[]>>): IExpression<U[]> ;
     // map(action: Action<IExpression<T>>);
@@ -38,7 +42,11 @@ abstract class Value<T> implements IExpression<T> {
     public observers: NextObserver<T>[];
     public iterators: Iterator<T>[] = [];
 
-    subscribe(observer: NextObserver<T>): Subscription {
+    subscribe: (observer: NextObserver<T> | Action<T>) => Subscription = (observer) => {
+        if (typeof observer === "function") {
+            return this.subscribe({next: observer});
+        }
+
         if (this.value !== void 0)
             observer.next(this.value);
 
@@ -245,7 +253,7 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
         return this.parent.set([this.name], value);
     }
 
-    set(path: string[], value): boolean {
+    set(path: string[], value: T): boolean {
         this.parent.set([this.name, ...path], value);
         return false;
     }
@@ -276,27 +284,30 @@ export class Store<T> extends Value<T> {
     }
 
     update = (value: T) => {
-        this.value = value;
+        return mergeObject(this, 'value', value);
     }
 
-    set(path: (number | string)[], value): boolean {
-        if (path.length === 0)
-            return false;
-
+    resolve(path: (number | string)[]) {
         var obj = this.value || (this.value = {} as T);
         for(var i=0 ; i<path.length-1 ; i++) {
             var name = path[i];
             obj = obj[name] || (obj[name] = {})
         }
         const last = path[path.length - 1];
+        return { obj, property: last };
+    }
 
-        if (obj[last] !== value) {
-            if (!mergeObject(obj[last], value)) {
-                obj[last] = value;
-            }
+    set(path: (number | string)[], value): boolean {
+        if (path.length === 0)
+            return false;
+
+        const { obj, property } = this.resolve(path);
+
+        if (obj[property] !== value) {
+            return mergeObject(obj, property, value)
         }
 
-        return this.refresh() > 0;
+        return false;
     }
 
     public refresh() {
@@ -366,15 +377,19 @@ export class Store<T> extends Value<T> {
 }
 
 
-function mergeObject(obj: any, value: any) {
-    if (obj && typeof obj === "object" && value && typeof value === "object") {
+function mergeObject(parent: any, property: string | number, value: any): boolean {
+    const obj = parent[property];
+    if (obj === value) {
+        return false;
+    }
+    else if (obj && typeof obj === "object" && value && typeof value === "object") {
+        let b = false;
         for(var prop in value) {
-            if (!mergeObject(obj[prop], value[prop])) {
-                obj[prop] = value[prop];
-            }
+            b = b || mergeObject(obj, prop, value[prop]);
         }
+        return b;
+    } else {
+        parent[property] = value;
         return true;
     }
-
-    return false;
 }

@@ -1,21 +1,24 @@
-type Observer<T> = { next(value?: T): void }
-type Subscription = { unsubscribe() }
+type Unsubscribable = { unsubscribe() }
+type Subscription = Unsubscribable;
 type Selector<T, U> = (arg: T, newIndex?: number) => U;
 type MoveHandler = (fromIndex: number, toIndex: number) => any;
 type Parent = {
     set(path: (number | string)[], value): boolean;
+}
+export interface NextObserver<T> {
+    next: (value: T) => void;
 }
 
 type ItemOf<T> = T extends any[] ? T[number] : T;
 
 export interface IExpression<T> {
     value?: T;
-    observers?: Observer<T>[];
+    observers?: NextObserver<T>[];
     properties?: IProperty<never>[];
     iterators?: Iterator<T>[];
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
-    subscribe(observer: Observer<T>): Subscription;
+    subscribe(observer: NextObserver<T>): Unsubscribable;
     // flatMap<U>(selector: Selector<IExpression<ItemOf<T>>, IExpression<U[]>>): IExpression<U[]> ;
     // map(action: Action<IExpression<T>>);
     // iterations : Iteration<T, Subscription>[];
@@ -27,20 +30,15 @@ export interface IProperty<T> extends IExpression<T> {
     update(value: T): boolean;
 }
 
-interface IObservable<T> {
-    subscribe(observer: Observer<T>): Subscription;
-    complete();
-}
-
 const empty = "";
 abstract class Value<T> implements IExpression<T> {
 
     public properties = [];
     public value?: T;
-    public observers: Observer<T>[];
+    public observers: NextObserver<T>[];
     public iterators: Iterator<T>[] = [];
 
-    subscribe(observer: Observer<T>): Subscription {
+    subscribe(observer: NextObserver<T>): Subscription {
         if (this.value !== void 0)
             observer.next(this.value);
 
@@ -49,7 +47,7 @@ abstract class Value<T> implements IExpression<T> {
             let length = observers.length;
             observers[length] = observer;
         } else {
-            this.observers = [observer];
+            this.observers = observers = [observer];
         }
 
         return {
@@ -243,7 +241,7 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
         return false;
     }
 
-    update(value: T) {
+    update = (value: T) => {
         return this.parent.set([this.name], value);
     }
 
@@ -254,7 +252,7 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
 }
 
 export class Store<T> extends Value<T> {
-    constructor(public value: T) {
+    constructor(public value?: T) {
         super();
     }
 
@@ -277,7 +275,7 @@ export class Store<T> extends Value<T> {
         }
     }
 
-    update(value: T) {
+    update = (value: T) => {
         this.value = value;
     }
 
@@ -293,14 +291,16 @@ export class Store<T> extends Value<T> {
         const last = path[path.length - 1];
 
         if (obj[last] !== value) {
-            obj[last] = value;
+            if (!mergeObject(obj[last], value)) {
+                obj[last] = value;
+            }
         }
 
         return this.refresh() > 0;
     }
 
     public refresh() {
-        var stack: { properties, value, iterators?}[] = [this];
+        var stack: { properties, value?, iterators?}[] = [this];
         var stackLength: number = 1;
         var dirty: IProperty<any>[] = [];
         var dirtyLength: number = 0;
@@ -347,10 +347,34 @@ export class Store<T> extends Value<T> {
             const { value } = property;
             var e = observers.length | 0;
             while (e--) {
-                var observer = observers[e];
+                let observer = observers[e];
                 observer.next(value);
             }
         }
+
+        if (dirtyLength) {
+            const { observers, value } = this;
+            var e = (observers && observers.length) | 0;
+            while (e--) {
+                let observer = observers[e];
+                observer.next(value);
+            }
+        }
+
         return dirtyLength;
     }
+}
+
+
+function mergeObject(obj: any, value: any) {
+    if (obj && typeof obj === "object" && value && typeof value === "object") {
+        for(var prop in value) {
+            if (!mergeObject(obj[prop], value[prop])) {
+                obj[prop] = value[prop];
+            }
+        }
+        return true;
+    }
+
+    return false;
 }

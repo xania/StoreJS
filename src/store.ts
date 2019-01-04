@@ -42,7 +42,7 @@ abstract class Value<T> implements IExpression<T> {
     public observers: NextObserver<T>[];
     public iterators: Iterator<T>[] = [];
 
-    subscribe: (observer: NextObserver<T> | Action<T>) => Subscription = (observer) => {
+    subscribe(observer: NextObserver<T> | Action<T>) : Subscription  {
         if (typeof observer === "function") {
             return this.subscribe({next: observer});
         }
@@ -385,7 +385,7 @@ function mergeObject(parent: any, property: string | number, value: any): boolea
     else if (obj && typeof obj === "object" && value && typeof value === "object") {
         let b = false;
         for(var prop in value) {
-            b = b || mergeObject(obj, prop, value[prop]);
+            b = mergeObject(obj, prop, value[prop]) || b;
         }
         return b;
     } else {

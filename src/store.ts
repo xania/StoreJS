@@ -27,11 +27,11 @@ export interface IExpression<T> {
     // map(action: Action<IExpression<T>>);
     // iterations : Iteration<T, Subscription>[];
     iterator(): Iterator<T>;
+    update?(value: T): boolean;
 }
 
 export interface IProperty<T> extends IExpression<T> {
     name: string | number;
-    update(value: T): boolean;
 }
 
 const empty = "";
@@ -260,7 +260,7 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
 }
 
 export class Store<T> extends Value<T> {
-    constructor(public value?: T) {
+    constructor(public value?: T, public autoRefresh: boolean = true) {
         super();
     }
 
@@ -284,7 +284,12 @@ export class Store<T> extends Value<T> {
     }
 
     update = (value: T) => {
-        return mergeObject(this, 'value', value);
+        if (mergeObject(this, 'value', value)) {
+            this.autoRefresh && this.refresh();
+            return true;
+        }
+
+        return false;
     }
 
     resolve(path: (number | string)[]) {
@@ -304,7 +309,11 @@ export class Store<T> extends Value<T> {
         const { obj, property } = this.resolve(path);
 
         if (obj[property] !== value) {
-            return mergeObject(obj, property, value)
+            var changed = mergeObject(obj, property, value)
+            if (changed && this.autoRefresh) {
+                this.refresh();
+            }
+            return changed;
         }
 
         return false;
@@ -378,14 +387,14 @@ export class Store<T> extends Value<T> {
 
 
 function mergeObject(parent: any, property: string | number, value: any): boolean {
-    const obj = parent[property];
-    if (obj === value) {
+    const current = parent[property];
+    if (current === value) {
         return false;
     }
-    else if (obj && typeof obj === "object" && value && typeof value === "object") {
+    else if (current && typeof current === "object" && value && typeof value === "object") {
         let b = false;
         for(var prop in value) {
-            b = mergeObject(obj, prop, value[prop]) || b;
+            b = mergeObject(current, prop, value[prop]) || b;
         }
         return b;
     } else {

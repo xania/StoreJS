@@ -246,6 +246,11 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
 
             return true;
         }
+
+        if (Array.isArray(newValue)) {
+            return true;
+        }
+
         return false;
     }
 

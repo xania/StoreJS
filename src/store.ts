@@ -42,9 +42,9 @@ abstract class Value<T> implements IExpression<T> {
     public observers: NextObserver<T>[];
     public iterators: Iterator<T>[] = [];
 
-    subscribe(observer: NextObserver<T> | Action<T>) : Subscription  {
+    subscribe(observer: NextObserver<T> | Action<T>): Subscription {
         if (typeof observer === "function") {
-            return this.subscribe({next: observer});
+            return this.subscribe({ next: observer });
         }
 
         if (this.value !== void 0)
@@ -241,8 +241,8 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
         if (newValue !== this.value) {
             this.value = newValue;
 
-            if (newValue === void 0 || newValue === null)
-                this.properties.length = 0;
+            // if (newValue === void 0 || newValue === null)
+            //     this.properties.length = 0;
 
             return true;
         }
@@ -284,36 +284,22 @@ export class Store<T> extends Value<T> {
     }
 
     update = (value: T) => {
-        if (mergeObject(this, 'value', value)) {
+        if (this.value !== value) {
+            this.value = value;
             this.autoRefresh && this.refresh();
             return true;
         }
-
         return false;
     }
 
-    resolve(path: (number | string)[]) {
-        var obj = this.value || (this.value = {} as T);
-        for(var i=0 ; i<path.length-1 ; i++) {
-            var name = path[i];
-            obj = obj[name] || (obj[name] = {})
-        }
-        const last = path[path.length - 1];
-        return { obj, property: last };
-    }
-
     set(path: (number | string)[], value): boolean {
-        if (path.length === 0)
-            return false;
-
-        const { obj, property } = this.resolve(path);
-
-        if (obj[property] !== value) {
-            var changed = mergeObject(obj, property, value)
-            if (changed && this.autoRefresh) {
+        const newValue = mergeObject(this.value, path, value);
+        if (newValue !== this.value) {
+            this.value = newValue;
+            if (this.autoRefresh) {
                 this.refresh();
             }
-            return changed;
+            return true;
         }
 
         return false;
@@ -386,19 +372,16 @@ export class Store<T> extends Value<T> {
 }
 
 
-function mergeObject(parent: any, property: string | number, value: any): boolean {
-    const current = parent[property];
-    if (current === value) {
-        return false;
+function mergeObject(parent: any, path: (string | number)[], value: any) {
+    if (path.length === 0) {
+        return value;
     }
-    else if (current && typeof current === "object" && value && typeof value === "object") {
-        let b = false;
-        for(var prop in value) {
-            b = mergeObject(current, prop, value[prop]) || b;
-        }
-        return b;
+    const property = path[0]
+    const current = parent[property];
+    const newValue = path.length ? mergeObject(current, path.slice(1), value) : value;
+    if (current === newValue) {
+        return parent;
     } else {
-        parent[property] = value;
-        return true;
+        return { ...parent, [property]: newValue };
     }
 }

@@ -1,3 +1,5 @@
+// import bestSeq, { lcs } from "./lcs"
+
 type Unsubscribable = { unsubscribe() }
 type Subscription = Unsubscribable;
 type Selector<T, U> = (arg: T, newIndex?: number) => U;
@@ -102,126 +104,113 @@ abstract class Value<T> implements IExpression<T> {
     }
 }
 
-class Iteration<T> {
-    constructor(public execute: Selector<IExpression<ItemOf<T>>, Subscription>, public move: MoveHandler) {
+type ArrayMutation<T> = (
+    { type: "insert", item: IExpression<T>, index: number } |
+    { type: "remove", item: IExpression<T>, index: number } |
+    { type: "move", item: IExpression<T>, from: number, to: number }
+);
 
-    }
+type ArrayMutations<T> = { array: T, mutations: ArrayMutation<ItemOf<T>>[] }
 
-    unsubscribe(item: IExpression<ItemOf<T>>) {
-        console.log('unsubscribe item: ', item);
-    }
-}
+export interface ObservableArray<T> {
+    subscribe(observer: ArrayMutationsObserver<T>): Subscription;
+};
 
-function findIndex<T>(properties: IProperty<T>[], idx: number, value: T) {
-    for (var m = idx; m < properties.length; m++) {
-        if (properties[m].value === value) {
-            return m;
-        }
-    }
-    return false;
-}
+type ArrayMutationsObserver<T> = {
+    next(value: ArrayMutations<T>);
+};
 
-export class Iterator<T> {
+export class Iterator<T> implements ObservableArray<T> {
     // public observers: Observer<IExpression<ItemOf<T>>>[];
     public properties: ObjectProperty<ItemOf<T>>[] = [];
     public length: number = 0;
-    public iterations: Iteration<T>[] = [];
+    public _observers: NextObserver<ArrayMutations<T>>[] = [];
     public value;
     public parentValue;
-    private subscrSymbol = Symbol("subscriptions")
 
     constructor(public parent: IExpression<T>) {
     }
 
-    get propertyObservers() {
-        const { subscrSymbol } = this;
+    subscribe(observer: ArrayMutationsObserver<T>): Subscription {
+        const { _observers: observers } = this;
+        observers.push(observer);
 
-        let result = [];
-        for (let prop of this.properties) {
-            result.push.apply(result, prop[subscrSymbol])
+        if (Array.isArray (this.parent.value) ) {
+            const mutations = this.properties.map((p, i) => ({ type: "insert", item: p, index: i }) as ArrayMutation<T>);
+            this.notifyObservers({ array: this.parent.value, mutations });
         }
-
-        return result;
-    }
-
-    map(execute: Selector<IExpression<ItemOf<T>>, Subscription>, move: MoveHandler): any[] {
-        var iterations = this.iterations || (this.iterations = []);
-        var iteration = new Iteration(execute, move);
-        iterations.push(iteration);
-        return iterations;
+        return {
+            unsubscribe() {
+                var idx = observers.indexOf(observer);
+                observers.splice(idx, 1);
+            }
+        } as Subscription
     }
 
     refresh(parentValue: T) {
         this.value = parentValue;
         let valueLength = parentValue['length'],
             prevLength = this.length,
-            properties = this.properties,
-            { subscrSymbol } = this;
+            properties = this.properties;
 
-        let changed = valueLength !== prevLength;
+        // bestSeq(properties, parentValue as any, (p, v) => p.value === v, () => {
+        //     // TODO
+        // });
+
+        const mutations: ArrayMutation<ItemOf<T>>[] = [];
         for (let n = 0; n < valueLength; n++) {
             let next = parentValue[n];
-            let propIdx: false | number = false; // findIndex<ItemOf<T>>(properties, n, next);
+            let propIdx: false | number = false;
 
-            for (var m = n; m < prevLength; m++) {
-                if (properties[m].value === next) {
-                    propIdx = m;
-                    break;
+            if (typeof next === "object") {
+                for (var m = n; m < prevLength; m++) {
+                    if (properties[m].value === next) {
+                        propIdx = m;
+                        break;
+                    }
                 }
+            } else if (properties[n]) {
+                propIdx = n;
             }
 
-            if (propIdx !== false) {
-                if (propIdx !== n) {
-                    properties[propIdx].value = properties[n].value;
-                    properties[n].value = next;
-                    this.moveTo(n, propIdx)
-                } else {
-                    properties[n].name = n;
-                }
-            } else {
+            if (propIdx === false) {
                 let item = new ObjectProperty<ItemOf<T>>(this, n);
-                item[subscrSymbol] = [];
                 properties.splice(n, 0, item);
-                this.insertAt(item, n);
                 prevLength++;
+                mutations.push({ type: "insert", item, index: n })
+            } else if (propIdx !== n) {
+                let swap = properties[propIdx];
+                properties[propIdx] = properties[n];
+                properties[n] = swap;
+                properties[n].name = n;
+                properties[propIdx].name = propIdx;
+                mutations.push({ type: "move", item: swap, from: n, to: propIdx })
             }
+
         }
 
-        for (let i = valueLength; i < prevLength; i++) {
-            let item = properties[i];
-            var subscriptions = item[subscrSymbol];
-            for (let e = 0; e < subscriptions.length; e++) {
-                subscriptions[e].unsubscribe()
-            }
+        for (let i = prevLength - 1; i >= valueLength; i--) {
+            mutations.push({ type: "remove", item: properties[i], index: i })
         }
         this.length = valueLength;
         properties.length = valueLength;
 
-        return changed;
+        if (mutations.length > 0) {
+            this.notifyObservers({ array: parentValue, mutations });
+            return true;
+        }
+        return false;
+    }
+
+    notifyObservers(mutations) {
+        const { _observers: observers } = this;
+        for (var i = 0; i < observers.length; i++) {
+            observers[i].next(mutations)
+        }
     }
 
     set(path: string[], value): boolean {
         throw new Error("Not supported");
-    }
-
-    insertAt(item: IProperty<ItemOf<T>>, newIndex: number) {
-        var { iterations, subscrSymbol } = this;
-        if (iterations) {
-            for (let e = 0; e < iterations.length; e++) {
-                let subscription = iterations[e].execute(item, newIndex);
-                item[subscrSymbol].push(subscription);
-            }
-        }
-    }
-
-    moveTo(oldIndex: number, newIndex: number) {
-        var { iterations } = this;
-        if (iterations) {
-            for (let e = 0; e < iterations.length; e++) {
-                let subscription = iterations[e].move(newIndex, oldIndex);
-                // item[subscrSymbol].push(subscription)
-            }
-        }
     }
 }
 
@@ -241,13 +230,9 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
         if (newValue !== this.value) {
             this.value = newValue;
 
-            // if (newValue === void 0 || newValue === null)
-            //     this.properties.length = 0;
+            if (newValue === void 0 || newValue === null)
+                this.properties.length = 0;
 
-            return true;
-        }
-
-        if (Array.isArray(newValue)) {
             return true;
         }
 

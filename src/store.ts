@@ -28,7 +28,7 @@ export interface IExpression<T> {
     // flatMap<U>(selector: Selector<IExpression<ItemOf<T>>, IExpression<U[]>>): IExpression<U[]> ;
     // map(action: Action<IExpression<T>>);
     // iterations : Iteration<T, Subscription>[];
-    iterator(): Iterator<T>;
+    iterator?(): Iterator<T>;
     update?(value: T): boolean;
 }
 
@@ -113,31 +113,38 @@ type ArrayMutation<T> = (
 type ArrayMutations<T> = { array: T, mutations: ArrayMutation<ItemOf<T>>[] }
 
 export interface ObservableArray<T> {
-    subscribe(observer: ArrayMutationsObserver<T>): Subscription;
+    subscribe(observer: NextArrayMutationsObserver<T>): Subscription;
 };
+type ArrayMutationsCallback<T> = (array: T, mutations?: ArrayMutation<ItemOf<T>>[] ) => any;
 
-type ArrayMutationsObserver<T> = {
-    next(value: ArrayMutations<T>);
+type NextArrayMutationsObserver<T> = {
+    next: ArrayMutationsCallback<T>;
 };
 
 export class Iterator<T> implements ObservableArray<T> {
     // public observers: Observer<IExpression<ItemOf<T>>>[];
     public properties: ObjectProperty<ItemOf<T>>[] = [];
     public length: number = 0;
-    public _observers: NextObserver<ArrayMutations<T>>[] = [];
+    public _observers: NextArrayMutationsObserver<T>[] = [];
     public value;
     public parentValue;
 
     constructor(public parent: IExpression<T>) {
     }
 
-    subscribe(observer: ArrayMutationsObserver<T>): Subscription {
+    subscribe(observer: NextArrayMutationsObserver<T> ): Subscription;
+    subscribe(observer: ArrayMutationsCallback<T> ): Subscription;
+    subscribe(observer: NextArrayMutationsObserver<T> | ArrayMutationsCallback<T> ): Subscription {
+            if (typeof observer === "function") {
+            return this.subscribe({ next: observer });
+        }
+
         const { _observers: observers } = this;
         observers.push(observer);
 
         if (Array.isArray (this.parent.value) ) {
             const mutations = this.properties.map((p, i) => ({ type: "insert", item: p, index: i }) as ArrayMutation<T>);
-            this.notifyObservers({ array: this.parent.value, mutations });
+            this.notifyObservers(this.parent.value, mutations);
         }
         return {
             unsubscribe() {
@@ -196,16 +203,16 @@ export class Iterator<T> implements ObservableArray<T> {
         properties.length = valueLength;
 
         if (mutations.length > 0) {
-            this.notifyObservers({ array: parentValue, mutations });
+            this.notifyObservers(parentValue, mutations);
             return true;
         }
         return false;
     }
 
-    notifyObservers(mutations) {
+    notifyObservers(array: T, mutations) {
         const { _observers: observers } = this;
         for (var i = 0; i < observers.length; i++) {
-            observers[i].next(mutations)
+            observers[i].next(array, mutations)
         }
     }
 

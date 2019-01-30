@@ -367,6 +367,10 @@ function mergeObject(parent: any, path: (string | number)[], value: any) {
         return value;
     }
     const property = path[0]
+    
+    if (parent === null || parent === undefined)
+        return { [property]: value };
+
     const current = parent[property];
     const newValue = path.length ? mergeObject(current, path.slice(1), value) : value;
     if (current === newValue) {

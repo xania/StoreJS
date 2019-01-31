@@ -110,8 +110,6 @@ type ArrayMutation<T> = (
     { type: "move", item: IExpression<T>, from: number, to: number }
 );
 
-type ArrayMutations<T> = { array: T, mutations: ArrayMutation<ItemOf<T>>[] }
-
 export interface ObservableArray<T> {
     subscribe(observer: NextArrayMutationsObserver<T>): Subscription;
 };

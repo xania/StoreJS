@@ -34,6 +34,7 @@ export interface IExpression<T> {
 
 export interface IProperty<T> extends IExpression<T> {
     name: string | number;
+    update(value: T): boolean;
 }
 
 const empty = "";
@@ -140,10 +141,12 @@ export class Iterator<T> implements ObservableArray<T> {
         const { _observers: observers } = this;
         observers.push(observer);
 
-        if (Array.isArray (this.parent.value) ) {
-            const mutations = this.properties.map((p, i) => ({ type: "insert", item: p, index: i }) as ArrayMutation<T>);
-            this.notifyObservers(this.parent.value, mutations);
-        }
+        // if (Array.isArray (this.parent.value) ) {
+        //     const mutations = this.properties.map((p, i) => ({ type: "insert", item: p, index: i }) as ArrayMutation<T>);
+        //     this.notifyObservers(this.parent.value, mutations);
+        // }
+        this.refresh(this.parent.value);
+
         return {
             unsubscribe() {
                 var idx = observers.indexOf(observer);

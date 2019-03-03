@@ -6,6 +6,7 @@ type Selector<T, U> = (arg: T, newIndex?: number) => U;
 type MoveHandler = (fromIndex: number, toIndex: number) => any;
 type Parent = {
     set(path: (number | string)[], value): boolean;
+    value?: any;
 }
 type Action<T> = (value: T) => void;
 
@@ -41,9 +42,10 @@ const empty = "";
 abstract class Value<T> implements IExpression<T> {
 
     public properties = [];
-    public value?: T;
     public observers: NextObserver<T>[];
     public iterators: Iterator<T>[] = [];
+
+    constructor(public value?: T) {}
 
     subscribe(observer: NextObserver<T> | Action<T>): Subscription {
         if (typeof observer === "function") {
@@ -101,6 +103,7 @@ abstract class Value<T> implements IExpression<T> {
     iterator(): Iterator<T> {
         let iter = new Iterator<T>(this);
         this.iterators.push(iter);
+        iter.refresh(this.value);
         return iter;
     }
 }
@@ -141,11 +144,10 @@ export class Iterator<T> implements ObservableArray<T> {
         const { _observers: observers } = this;
         observers.push(observer);
 
-        // if (Array.isArray (this.parent.value) ) {
-        //     const mutations = this.properties.map((p, i) => ({ type: "insert", item: p, index: i }) as ArrayMutation<T>);
-        //     this.notifyObservers(this.parent.value, mutations);
-        // }
-        this.refresh(this.parent.value);
+        if (Array.isArray (this.parent.value) ) {
+            const mutations = this.properties.map((p, i) => ({ type: "insert", item: p, index: i }) as ArrayMutation<T>);
+            this.notifyObservers(this.parent.value, mutations);
+        }
 
         return {
             unsubscribe() {
@@ -157,7 +159,7 @@ export class Iterator<T> implements ObservableArray<T> {
 
     refresh(parentValue: T) {
         this.value = parentValue;
-        let valueLength = parentValue['length'],
+        let valueLength = parentValue['length'] || 0,
             prevLength = this.length,
             properties = this.properties;
 
@@ -182,7 +184,7 @@ export class Iterator<T> implements ObservableArray<T> {
             }
 
             if (propIdx === false) {
-                let item = new ObjectProperty<ItemOf<T>>(this, n);
+                let item = new ObjectProperty<ItemOf<T>>(this, n, next);
                 properties.splice(n, 0, item);
                 prevLength++;
                 mutations.push({ type: "insert", item, index: n })
@@ -223,8 +225,8 @@ export class Iterator<T> implements ObservableArray<T> {
 }
 
 class ObjectProperty<T> extends Value<T> implements IProperty<T> {
-    constructor(protected parent: Parent, public name: string | number) {
-        super();
+    constructor(protected parent: Parent, public name: string | number, value?) {
+        super(value);
     }
 
     valueOf() {
@@ -260,6 +262,7 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
 export class Store<T> extends Value<T> {
     constructor(public value?: T, public autoRefresh: boolean = true) {
         super();
+        this.refresh();
     }
 
     expr(expr: string) {

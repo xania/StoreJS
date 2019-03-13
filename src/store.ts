@@ -159,7 +159,7 @@ export class Iterator<T> implements ObservableArray<T> {
 
     refresh(parentValue: T) {
         this.value = parentValue;
-        let valueLength = parentValue['length'] || 0,
+        let valueLength = (parentValue && parentValue['length']) || 0,
             prevLength = this.length,
             properties = this.properties;
 

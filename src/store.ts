@@ -23,6 +23,7 @@ export interface IExpression<T> {
     iterators?: Iterator<T>[];
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
+    p<K extends keyof T>(propertyName: K): IProperty<T[K]>;
 
     subscribe(next: (value: T) => void): Unsubscribable;
     subscribe(observer: NextObserver<T>): Unsubscribable;
@@ -45,7 +46,7 @@ abstract class Value<T> implements IExpression<T> {
     public observers: NextObserver<T>[];
     public iterators: Iterator<T>[] = [];
 
-    constructor(public value?: T) {}
+    constructor(public value?: T) { }
 
     subscribe(observer: NextObserver<T> | Action<T>): Subscription {
         if (typeof observer === "function") {
@@ -72,6 +73,10 @@ abstract class Value<T> implements IExpression<T> {
     }
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]> {
+        return this.p(propertyName);
+    }
+
+    p<K extends keyof T>(propertyName: K): IProperty<T[K]> {
         const properties = this.properties;
         let i = properties.length;
         while (i--) {
@@ -117,7 +122,7 @@ type ArrayMutation<T> = (
 export interface ObservableArray<T> {
     subscribe(observer: NextArrayMutationsObserver<T>): Subscription;
 };
-type ArrayMutationsCallback<T> = (array: T, mutations?: ArrayMutation<ItemOf<T>>[] ) => any;
+type ArrayMutationsCallback<T> = (array: T, mutations?: ArrayMutation<ItemOf<T>>[]) => any;
 
 type NextArrayMutationsObserver<T> = {
     next: ArrayMutationsCallback<T>;
@@ -134,17 +139,17 @@ export class Iterator<T> implements ObservableArray<T> {
     constructor(public parent: IExpression<T>) {
     }
 
-    subscribe(observer: NextArrayMutationsObserver<T> ): Subscription;
-    subscribe(observer: ArrayMutationsCallback<T> ): Subscription;
-    subscribe(observer: NextArrayMutationsObserver<T> | ArrayMutationsCallback<T> ): Subscription {
-            if (typeof observer === "function") {
+    subscribe(observer: NextArrayMutationsObserver<T>): Subscription;
+    subscribe(observer: ArrayMutationsCallback<T>): Subscription;
+    subscribe(observer: NextArrayMutationsObserver<T> | ArrayMutationsCallback<T>): Subscription {
+        if (typeof observer === "function") {
             return this.subscribe({ next: observer });
         }
 
         const { _observers: observers } = this;
         observers.push(observer);
 
-        if (Array.isArray (this.parent.value) ) {
+        if (Array.isArray(this.parent.value)) {
             const mutations = this.properties.map((p, i) => ({ type: "insert", item: p, index: i }) as ArrayMutation<T>);
             this.notifyObservers(this.parent.value, mutations);
         }
@@ -239,10 +244,6 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
 
         if (newValue !== this.value) {
             this.value = newValue;
-
-            if (newValue === void 0 || newValue === null)
-                this.properties.length = 0;
-
             return true;
         }
 
@@ -378,7 +379,7 @@ function mergeObject(parent: any, path: (string | number)[], value: any) {
         return value;
     }
     const property = path[0]
-    
+
     if (parent === null || parent === undefined)
         return { [property]: value };
 

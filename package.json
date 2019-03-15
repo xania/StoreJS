@@ -1,5 +1,5 @@
 {
-  "name": "xania.storejs",
+  "name": "storejs",
   "version": "0.0.1",
   "description": "Reactive store to bridge between mutable data and observables",
   "main": "src/xania.js",

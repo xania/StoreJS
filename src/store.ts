@@ -37,6 +37,7 @@ export interface IExpression<T> {
 export interface IProperty<T> extends IExpression<T> {
     name: string | number;
     update(value: T): boolean;
+    asProxy(): T;
 }
 
 const empty = "";
@@ -110,6 +111,19 @@ abstract class Value<T> implements IExpression<T> {
         this.iterators.push(iter);
         iter.refresh(this.value);
         return iter;
+    }
+
+    asProxy(): T {
+        const self = this;
+        return new Proxy<any>(this, {
+            get<K extends keyof T>(parent: Value<T>, name: K) {
+                console.log(name);
+                return parent.p(name).asProxy();
+            },
+            set<K extends keyof T> (parent: Value<T>, name: K, value: T[K]) {
+                return parent.p(name).update(value);
+            }
+        });
     }
 }
 
@@ -255,8 +269,7 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
     }
 
     set(path: string[], value: T): boolean {
-        this.parent.set([this.name, ...path], value);
-        return false;
+        return this.parent.set([this.name, ...path], value);
     }
 }
 

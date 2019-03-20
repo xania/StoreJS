@@ -125,6 +125,11 @@ abstract class Value<T> implements IExpression<T> {
     valueOf() {
         return this.value;
     }
+
+    [Symbol.toStringTag] = (hint) => {
+        console.log(`toPrimitive hint: ${hint}`)
+        return this.value;
+    }
 }
 
 type ArrayMutation<T> = (
@@ -408,13 +413,16 @@ export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
                 return subscribe;
             if (name === "update")
                 return update;
+            if (typeof name === "symbol")
+                console.log(name);
             if (typeof name === "symbol" || name in parent)
                 return (parent as any)[name];
             return asProxy(parent.p(name));
         },
         set<K extends keyof T> (parent: Value<T>, name: K, value: T[K]) {
             return parent.p(name).update(value);
-        }
+        },
+        
     });
 
     function subscribe(observer): Unsubscribable {

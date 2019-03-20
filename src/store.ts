@@ -15,6 +15,12 @@ export interface NextObserver<T> {
 }
 
 type ItemOf<T> = T extends any[] ? T[number] : T;
+type ProxyOf<T> = 
+    { [K in keyof T]: ProxyOf<T[K]> } &
+    { 
+        subscribe(observer: NextObserver<T> | Action<T>): Unsubscribable;
+        update?(value: T): boolean;
+    };
 
 export interface IExpression<T> {
     value?: T;
@@ -37,7 +43,6 @@ export interface IExpression<T> {
 export interface IProperty<T> extends IExpression<T> {
     name: string | number;
     update(value: T): boolean;
-    asProxy(): T;
 }
 
 const empty = "";
@@ -113,17 +118,12 @@ abstract class Value<T> implements IExpression<T> {
         return iter;
     }
 
-    asProxy(): T {
-        const self = this;
-        return new Proxy<any>(this, {
-            get<K extends keyof T>(parent: Value<T>, name: K) {
-                console.log(name);
-                return parent.p(name).asProxy();
-            },
-            set<K extends keyof T> (parent: Value<T>, name: K, value: T[K]) {
-                return parent.p(name).update(value);
-            }
-        });
+    asProxy(): ProxyOf<T> {
+        return asProxy(this);
+    }
+
+    valueOf() {
+        return this.value;
     }
 }
 
@@ -246,10 +246,6 @@ export class Iterator<T> implements ObservableArray<T> {
 class ObjectProperty<T> extends Value<T> implements IProperty<T> {
     constructor(protected parent: Parent, public name: string | number, value?) {
         super(value);
-    }
-
-    valueOf() {
-        return this.value;
     }
 
     refresh(parentValue) {
@@ -402,5 +398,30 @@ function mergeObject(parent: any, path: (string | number)[], value: any) {
         return parent;
     } else {
         return { ...parent, [property]: newValue };
+    }
+}
+
+export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
+    return new Proxy<any>(self, {
+        get<K extends keyof T>(parent: IExpression<T>, name: K) {
+            if (name === "subscribe")
+                return subscribe;
+            if (name === "update")
+                return update;
+            if (typeof name === "symbol" || name in parent)
+                return (parent as any)[name];
+            return asProxy(parent.p(name));
+        },
+        set<K extends keyof T> (parent: Value<T>, name: K, value: T[K]) {
+            return parent.p(name).update(value);
+        }
+    });
+
+    function subscribe(observer): Unsubscribable {
+        return self.subscribe(observer);
+    }
+
+    function update(value: T): boolean {
+        return self.update(value);
     }
 }

@@ -14,14 +14,15 @@ export interface NextObserver<T> {
     next: (value: T) => void;
 }
 
+export type Subscribable<T> = { subscribe(observer: NextObserver<T> | Action<T>): Unsubscribable; };
 type ItemOf<T> = T extends any[] ? T[number] : T;
 type ProxyOf<T> = 
     { [K in keyof T]: ProxyOf<T[K]> } &
+    Subscribable<T> &
     { 
-        subscribe(observer: NextObserver<T> | Action<T>): Unsubscribable;
         update?(value: T): boolean;
         value: T;
-    };   
+    };
 
 export interface IExpression<T> {
     value?: T;

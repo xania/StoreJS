@@ -20,7 +20,8 @@ type ProxyOf<T> =
     { 
         subscribe(observer: NextObserver<T> | Action<T>): Unsubscribable;
         update?(value: T): boolean;
-    };
+        value: T;
+    };   
 
 export interface IExpression<T> {
     value?: T;
@@ -414,8 +415,9 @@ export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
             if (name === "update")
                 return update;
 
-            if (typeof name === "symbol" || name in parent)
-                return (parent as any)[name];
+            if (typeof name === "symbol" || name in self)
+                return (self as any)[name];
+
             return asProxy(parent.p(name));
         },
         set<K extends keyof T> (parent: Value<T>, name: K, value: T[K]) {

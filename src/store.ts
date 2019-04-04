@@ -19,12 +19,11 @@ export interface NextObserver<T> {
 }
 
 export type Subscribable<T> = { subscribe(observer: NextObserver<T> | Action<T>): Unsubscribable; };
-export type Liftable<T> = { lift<R>(operator: Operator<T, R>): Subscribable<R>; };
+export type Observable<T> = Subscribable<T> & { lift<R>(operator: Operator<T, R>): Observable<R>; };
 type ItemOf<T> = T extends any[] ? T[number] : T;
 type ProxyOf<T> = 
     { [K in keyof T]: ProxyOf<T[K]> } &
-    Liftable<T> &
-    Subscribable<T> &
+    Observable<T> &
     { 
         update?(value: T): boolean;
         value: T;
@@ -86,25 +85,24 @@ abstract class Value<T> implements IExpression<T> {
         } as Subscription
     }
 
-    lift<R>(operator: Operator<T, R>): Subscribable<R> {
-        const source = this;
-
-        return {
-            subscribe(observer: NextObserver<R> | Action<R>) {
-                if (typeof observer === "function")
-                    return source.subscribe(value => observer(operator(value)));
-
-                return source.subscribe(value => observer.next(operator(value)));
-            }
-        };
-        
-        // var subscription = this.subscribe({
-        //     next(value: T) {
-        //         subject.update(operator(value));
-        //     }
-        // })
-
-        // return subject;
+    lift<R>(operator: Operator<T, R>): Observable<R> {
+        return liftable(this, operator);
+        function liftable<R>(source: Value<T>, operator: Operator<T, R>) {
+            return {
+                operator,
+                subscribe(observer: NextObserver<R> | Action<R>) {
+                    if (typeof observer === "function")
+                        return source.subscribe(value => observer(operator(value)));
+    
+                    return source.subscribe(value => observer.next(operator(value)));
+                },
+                lift<S>(second: Operator<R, S>) {
+                    return liftable<S>(source, function(r) { 
+                        return second.call(this, operator.call(this, r)); 
+                    });
+                }
+            };
+        }
     }
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]> {

@@ -13,13 +13,16 @@ interface Family {
 test('observe age', () => {
   var store = new Store<Family>({
     father: {
-      firstName: "Papa",
-      age: 38
+      firstName: "Papa", age: 38
     }
   }).asProxy();
 
-  var expr = store.father.age.lift(x => x + 1);
+  var expr = store.father.age.lift(addOne).lift(addOne);
   // expect(expr).toBe(39);
-  expr.subscribe(v => expect(v).toBe(39));
+  expr.subscribe(v => expect(v).toBe(40));
 });
+
+function addOne(x: number ){ 
+  return x + 1;
+}
   

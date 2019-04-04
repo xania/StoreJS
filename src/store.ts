@@ -10,14 +10,20 @@ type Parent = {
 }
 type Action<T> = (value: T) => void;
 
+interface Operator<T, R> {
+    (source: T): R;
+}
+
 export interface NextObserver<T> {
     next: (value: T) => void;
 }
 
 export type Subscribable<T> = { subscribe(observer: NextObserver<T> | Action<T>): Unsubscribable; };
+export type Liftable<T> = { lift<R>(operator: Operator<T, R>): Subscribable<R>; };
 type ItemOf<T> = T extends any[] ? T[number] : T;
 type ProxyOf<T> = 
     { [K in keyof T]: ProxyOf<T[K]> } &
+    Liftable<T> &
     Subscribable<T> &
     { 
         update?(value: T): boolean;
@@ -78,6 +84,27 @@ abstract class Value<T> implements IExpression<T> {
                 observers.splice(idx, 1);
             }
         } as Subscription
+    }
+
+    lift<R>(operator: Operator<T, R>): Subscribable<R> {
+        const source = this;
+
+        return {
+            subscribe(observer: NextObserver<R> | Action<R>) {
+                if (typeof observer === "function")
+                    return source.subscribe(value => observer(operator(value)));
+
+                return source.subscribe(value => observer.next(operator(value)));
+            }
+        };
+        
+        // var subscription = this.subscribe({
+        //     next(value: T) {
+        //         subject.update(operator(value));
+        //     }
+        // })
+
+        // return subject;
     }
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]> {
@@ -435,3 +462,6 @@ export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
         return self.update(value);
     }
 }
+
+export default Store;
+

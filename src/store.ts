@@ -21,10 +21,10 @@ export interface NextObserver<T> {
 export type Subscribable<T> = { subscribe(observer: NextObserver<T> | Action<T>): Unsubscribable; };
 export type Observable<T> = Subscribable<T> & { lift<R>(operator: Operator<T, R>): Observable<R>; };
 type ItemOf<T> = T extends any[] ? T[number] : T;
-type ProxyOf<T> = 
+type ProxyOf<T> =
     { [K in keyof T]: ProxyOf<T[K]> } &
     Observable<T> &
-    { 
+    {
         update?(value: T): boolean;
         value: T;
     };
@@ -45,10 +45,11 @@ export interface IExpression<T> {
     // iterations : Iteration<T, Subscription>[];
     iterator?(): Iterator<T>;
     update?(value: T): boolean;
+    observe<U>(comparer: (prevValue: T, newValue: T) => U): ValueObserver<T, U>
 }
 
 export interface IProperty<T> extends IExpression<T> {
-    name: string | number;
+    // name: string | number;
     update(value: T): boolean;
 }
 
@@ -89,16 +90,15 @@ abstract class Value<T> implements IExpression<T> {
         return liftable(this, operator);
         function liftable<R>(source: Value<T>, operator: Operator<T, R>) {
             return {
-                operator,
                 subscribe(observer: NextObserver<R> | Action<R>) {
                     if (typeof observer === "function")
                         return source.subscribe(value => observer(operator(value)));
-    
+
                     return source.subscribe(value => observer.next(operator(value)));
                 },
                 lift<S>(second: Operator<R, S>) {
-                    return liftable<S>(source, function(r) { 
-                        return second.call(this, operator.call(this, r)); 
+                    return liftable<S>(source, function (r) {
+                        return second.call(this, operator.call(this, r));
                     });
                 }
             };
@@ -157,18 +157,27 @@ abstract class Value<T> implements IExpression<T> {
         console.log(`toPrimitive hint: ${hint}`)
         return this.value;
     }
+
+    observe<U>(comparer: (prevValue: T, newValue: T) => U): ValueObserver<T, U> {
+        const p = new ValueObserver(comparer);
+
+        const {properties} = this;
+        p.refresh(this.value);
+        properties.push(p);
+        return p;
+    }
 }
 
-type ArrayMutation<T> = (
-    { type: "insert", item: IExpression<T>, index: number } |
-    { type: "remove", item: IExpression<T>, index: number } |
-    { type: "move", item: IExpression<T>, from: number, to: number }
+type ArrayMutation = (
+    { type: "insert", index: number } |
+    { type: "remove", index: number } |
+    { type: "move", from: number, to: number }
 );
 
 export interface ObservableArray<T> {
     subscribe(observer: NextArrayMutationsObserver<T>): Subscription;
 };
-type ArrayMutationsCallback<T> = (array: T, mutations?: ArrayMutation<ItemOf<T>>[]) => any;
+type ArrayMutationsCallback<T> = (array: T, mutations?: ArrayMutation[]) => any;
 
 type NextArrayMutationsObserver<T> = {
     next: ArrayMutationsCallback<T>;
@@ -196,7 +205,7 @@ export class Iterator<T> implements ObservableArray<T> {
         observers.push(observer);
 
         if (Array.isArray(this.parent.value)) {
-            const mutations = this.properties.map((p, i) => ({ type: "insert", item: p, index: i }) as ArrayMutation<T>);
+            const mutations = this.properties.map((p, i) => ({ type: "insert", index: i }) as ArrayMutation);
             this.notifyObservers(this.parent.value, mutations);
         }
 
@@ -218,7 +227,7 @@ export class Iterator<T> implements ObservableArray<T> {
         //     // TODO
         // });
 
-        const mutations: ArrayMutation<ItemOf<T>>[] = [];
+        const mutations: ArrayMutation[] = [];
         for (let n = 0; n < valueLength; n++) {
             let next = parentValue[n];
             let propIdx: false | number = false;
@@ -238,20 +247,20 @@ export class Iterator<T> implements ObservableArray<T> {
                 let item = new ObjectProperty<ItemOf<T>>(this, n, next);
                 properties.splice(n, 0, item);
                 prevLength++;
-                mutations.push({ type: "insert", item, index: n })
+                mutations.push({ type: "insert", index: n })
             } else if (propIdx !== n) {
                 let swap = properties[propIdx];
                 properties[propIdx] = properties[n];
                 properties[n] = swap;
                 properties[n].name = n;
                 properties[propIdx].name = propIdx;
-                mutations.push({ type: "move", item: swap, from: n, to: propIdx })
+                mutations.push({ type: "move", from: n, to: propIdx })
             }
 
         }
 
         for (let i = prevLength - 1; i >= valueLength; i--) {
-            mutations.push({ type: "remove", item: properties[i], index: i })
+            mutations.push({ type: "remove", index: i })
         }
         this.length = valueLength;
         properties.length = valueLength;
@@ -272,6 +281,33 @@ export class Iterator<T> implements ObservableArray<T> {
 
     set(path: string[], value): boolean {
         throw new Error("Not supported");
+    }
+
+    map<U>(project: (item: ItemOf<T>) => U) {
+        const iterator = this;
+        return create(project);
+
+        function create<U>(project: (item: ItemOf<T>) => U) {
+            const first = project;
+            return {
+                subscribe(observer: ArrayMutationsCallback<U[]>) {
+                    return iterator.subscribe((arr, mutations) => {
+                        observer(map(arr), mutations)
+                    })
+                },
+                map<S>(project: (item: U) => S) {
+                    return create<S>(x => project(first(x)));
+                }
+            }
+
+            function map(arr: T): U[] {
+                if (Array.isArray(arr)) {
+                    return arr.map(project);
+                } else {
+                    return [project(arr as ItemOf<T>)];
+                }
+            }
+        }
     }
 }
 
@@ -446,7 +482,7 @@ export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
 
             return asProxy(parent.p(name));
         },
-        set<K extends keyof T> (parent: Value<T>, name: K, value: T[K]) {
+        set<K extends keyof T>(parent: Value<T>, name: K, value: T[K]) {
             return parent.p(name).update(value);
         },
 
@@ -463,3 +499,18 @@ export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
 
 export default Store;
 
+class ValueObserver<T, U> extends Value<T> {
+    constructor(public comparer: (prevValue: T, newValue: T) => U) {
+        super();
+    }
+
+    refresh(parentValue) {
+        var compareResult = this.comparer(this.value, parentValue)
+        if (compareResult) {
+            this.value = parentValue;
+            return true;
+        } else {
+            return false;
+        }
+    }
+}

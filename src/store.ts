@@ -45,7 +45,12 @@ export interface IExpression<T> {
     // iterations : Iteration<T, Subscription>[];
     iterator?(): Iterator<T>;
     update?(value: T): boolean;
-    observe<U>(comparer: (prevValue: T, newValue: T) => U): ValueObserver<T, U>
+    /**
+     * maps value of this expressions of type T to type U
+     * and emits distinct values of U
+     * @param project projects value of T to U 
+     */
+    lift<U>(project: (value: T, prev) => U): ValueObserver<T, U>
 }
 
 export interface IProperty<T> extends IExpression<T> {
@@ -84,25 +89,6 @@ abstract class Value<T> implements IExpression<T> {
                 observers.splice(idx, 1);
             }
         } as Subscription
-    }
-
-    lift<R>(operator: Operator<T, R>): Observable<R> {
-        return liftable(this, operator);
-        function liftable<R>(source: Value<T>, operator: Operator<T, R>) {
-            return {
-                subscribe(observer: NextObserver<R> | Action<R>) {
-                    if (typeof observer === "function")
-                        return source.subscribe(value => observer(operator(value)));
-
-                    return source.subscribe(value => observer.next(operator(value)));
-                },
-                lift<S>(second: Operator<R, S>) {
-                    return liftable<S>(source, function (r) {
-                        return second.call(this, operator.call(this, r));
-                    });
-                }
-            };
-        }
     }
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]> {
@@ -158,7 +144,7 @@ abstract class Value<T> implements IExpression<T> {
         return this.value;
     }
 
-    observe<U>(comparer: (prevValue: T, newValue: T) => U): ValueObserver<T, U> {
+    lift<U>(comparer: (newValue: T, prevValue: U) => U): ValueObserver<T, U> {
         const p = new ValueObserver(comparer);
 
         const {properties} = this;
@@ -499,15 +485,15 @@ export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
 
 export default Store;
 
-class ValueObserver<T, U> extends Value<T> {
-    constructor(public comparer: (prevValue: T, newValue: T) => U) {
+class ValueObserver<T, U> extends Value<U> {
+    constructor(public project: (newValue: T, prevValue: U) => U) {
         super();
     }
 
-    refresh(parentValue) {
-        var compareResult = this.comparer(this.value, parentValue)
-        if (compareResult) {
-            this.value = parentValue;
+    refresh(parentValue: T) {
+        var result = this.project(parentValue, this.value)
+        if (result !== this.value) {
+            this.value = result;
             return true;
         } else {
             return false;

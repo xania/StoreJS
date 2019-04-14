@@ -32,11 +32,13 @@ type ProxyOf<T> =
 export interface IExpression<T> {
     value?: T;
     observers?: NextObserver<T>[];
-    properties?: IProperty<never>[];
+    properties: IExpression<T[keyof T]>[];
     iterators?: Iterator<T>[];
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
     p<K extends keyof T>(propertyName: K): IProperty<T[K]>;
+    property<K extends keyof T>(propertyName: K, immutable: true): IExpression<T[K]>;
+    p<K extends keyof T>(propertyName: K, immutable: true): IExpression<T[K]>;
 
     subscribe(next: (value: T) => void): Unsubscribable;
     subscribe(observer: NextObserver<T>): Unsubscribable;
@@ -59,9 +61,9 @@ export interface IProperty<T> extends IExpression<T> {
 }
 
 const empty = "";
-abstract class Value<T> implements IExpression<T> {
+class Value<T> implements IExpression<T> {
 
-    public properties = [];
+    public properties: IExpression<T[keyof T]>[] = [];
     public observers: NextObserver<T>[];
     public iterators: Iterator<T>[] = [];
 
@@ -91,22 +93,30 @@ abstract class Value<T> implements IExpression<T> {
         } as Subscription
     }
 
-    property<K extends keyof T>(propertyName: K): IProperty<T[K]> {
-        return this.p(propertyName);
+    property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
+    property<K extends keyof T>(propertyName: K, immutable: true): IExpression<T[K]>;
+    property<K extends keyof T>(propertyName: K, immutable?: true) {
+        return this.p(propertyName, immutable);
     }
 
-    p<K extends keyof T>(propertyName: K): IProperty<T[K]> {
+    p<K extends keyof T>(propertyName: K): IProperty<T[K]>;
+    p<K extends keyof T>(propertyName: K, immutable: true): IExpression<T[K]>;
+    p<K extends keyof T>(propertyName: K, immutable?: true) {
         const properties = this.properties;
         let i = properties.length;
-        while (i--) {
-            const prop = properties[i];
+        while (!immutable && i--) {
+            const prop: any = properties[i];
             if (prop.name === propertyName) {
                 return prop;
             }
         }
-        const property = new ObjectProperty<T[K]>(this, propertyName as string);
-        property.refresh(this.value);
-        properties.push(property);
+        var parentValue = this.value;
+        var initValue = parentValue ? parentValue[propertyName] : void 0;
+
+        const property = immutable 
+            ? new Value<T[K]>(initValue)
+            : new ObjectProperty<T[K]>(this, propertyName as string, initValue);
+        properties.push(property as any);
         return property;
     }
 
@@ -145,11 +155,9 @@ abstract class Value<T> implements IExpression<T> {
     }
 
     lift<U>(comparer: (newValue: T, prevValue: U) => U): ValueObserver<T, U> {
-        const p = new ValueObserver(comparer);
-
-        const {properties} = this;
-        p.refresh(this.value);
-        properties.push(p);
+        const p = new ValueObserver(comparer, comparer(this.value, null));
+        const { properties } = this;
+        properties.push(p as any);
         return p;
     }
 }
@@ -298,7 +306,7 @@ export class Iterator<T> implements ObservableArray<T> {
 }
 
 class ObjectProperty<T> extends Value<T> implements IProperty<T> {
-    constructor(protected parent: Parent, public name: string | number, value?) {
+    constructor(public parent: Parent, public name: string | number, value?: T) {
         super(value);
     }
 
@@ -324,9 +332,8 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
 }
 
 export class Store<T> extends Value<T> {
-    constructor(public value?: T, public autoRefresh: boolean = true) {
-        super();
-        this.refresh();
+    constructor(value?: T, public autoRefresh: boolean = true) {
+        super(value);
     }
 
     expr(expr: string) {
@@ -486,8 +493,8 @@ export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
 export default Store;
 
 class ValueObserver<T, U> extends Value<U> {
-    constructor(public project: (newValue: T, prevValue: U) => U) {
-        super();
+    constructor(public project: (newValue: T, prevValue: U) => U, initValue) {
+        super(initValue);
     }
 
     refresh(parentValue: T) {

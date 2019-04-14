@@ -2,9 +2,8 @@
 
 type Unsubscribable = { unsubscribe() }
 type Subscription = Unsubscribable;
-type Selector<T, U> = (arg: T, newIndex?: number) => U;
-type MoveHandler = (fromIndex: number, toIndex: number) => any;
 type Parent = {
+    properties: IExpression<any>[];
     set(path: (number | string)[], value): boolean;
     value?: any;
 }
@@ -52,7 +51,8 @@ export interface IExpression<T> {
      * and emits distinct values of U
      * @param project projects value of T to U 
      */
-    lift<U>(project: (value: T, prev) => U): ValueObserver<T, U>
+    lift<U>(project: (value: T, prev) => U): ValueObserver<T, U>;
+    dispose();
 }
 
 export interface IProperty<T> extends IExpression<T> {
@@ -67,7 +67,7 @@ class Value<T> implements IExpression<T> {
     public observers: NextObserver<T>[];
     public iterators: Iterator<T>[] = [];
 
-    constructor(public value?: T) { }
+    constructor(public parent: Parent, public value?: T) { }
 
     subscribe(observer: NextObserver<T> | Action<T>): Subscription {
         if (typeof observer === "function") {
@@ -114,7 +114,7 @@ class Value<T> implements IExpression<T> {
         var initValue = parentValue ? parentValue[propertyName] : void 0;
 
         const property = immutable 
-            ? new Value<T[K]>(initValue)
+            ? new Value<T[K]>(this, initValue)
             : new ObjectProperty<T[K]>(this, propertyName as string, initValue);
         properties.push(property as any);
         return property;
@@ -155,10 +155,18 @@ class Value<T> implements IExpression<T> {
     }
 
     lift<U>(comparer: (newValue: T, prevValue: U) => U): ValueObserver<T, U> {
-        const p = new ValueObserver(comparer, comparer(this.value, null));
+        const p = new ValueObserver(this, comparer, comparer(this.value, null));
         const { properties } = this;
         properties.push(p as any);
         return p;
+    }
+
+    dispose() {
+        const { properties } = this.parent;
+        var idx = properties.indexOf(this);
+        if (idx >= 0) {
+            properties.splice(idx, 1);
+        }
     }
 }
 
@@ -306,8 +314,8 @@ export class Iterator<T> implements ObservableArray<T> {
 }
 
 class ObjectProperty<T> extends Value<T> implements IProperty<T> {
-    constructor(public parent: Parent, public name: string | number, value?: T) {
-        super(value);
+    constructor(parent: Parent, public name: string | number, value?: T) {
+        super(parent, value);
     }
 
     refresh(parentValue) {
@@ -333,7 +341,7 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
 
 export class Store<T> extends Value<T> {
     constructor(value?: T, public autoRefresh: boolean = true) {
-        super(value);
+        super(null, value);
     }
 
     expr(expr: string) {
@@ -493,8 +501,8 @@ export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
 export default Store;
 
 class ValueObserver<T, U> extends Value<U> {
-    constructor(public project: (newValue: T, prevValue: U) => U, initValue) {
-        super(initValue);
+    constructor(parent: Parent, public project: (newValue: T, prevValue: U) => U, initValue) {
+        super(parent, initValue);
     }
 
     refresh(parentValue: T) {

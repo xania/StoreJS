@@ -369,7 +369,7 @@ function refresh<T>(root: Value<T>): boolean {
     }
 
     if (dirtyLength) {
-        const { observers, value } = this;
+        const { observers, value } = root;
         var e = (observers && observers.length) | 0;
         while (e--) {
             let observer = observers[e];

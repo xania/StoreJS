@@ -16,7 +16,7 @@ export type Subscribable<T> = { subscribe(observer: NextObserver<T> | Action<T>)
 export type Observable<T> = Subscribable<T> & { lift<R>(operator: Operator<T, R>): Observable<R>; };
 type ItemOf<T> = T extends any[] ? T[number] : T;
 type ProxyOf<T> =
-    { [K in keyof T]: ProxyOf<T[K]> } &
+    { [K in keyof T]: T[K] extends (...args: any) => any ? T[K] : ProxyOf<T[K]> } &
     Observable<T> &
     {
         update?(value: T): boolean;
@@ -191,23 +191,34 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
         return parentValue && parentValue[this.name];
     }
 
-    update = (value: T) => {
+    update = (value: T, autoRefresh: boolean = true) => {
         if (value === this.value)
             return false;
         this.value = value;
-        const parentValue = this.parent.value;
+
+        var parentValue = this.parent.value;
         if (parentValue) {
             parentValue[this.name] = value;
+        } else {
+            mergeParent(this.parent, { [this.name]: value });
         }
 
-        const dirty: Value<any>[] = [this]
-        let parent = this.parent;
-        while (parent) {
-            dirty.push(parent);
-            parent = parent.parent;
+        if (autoRefresh) {
+            const dirty: Value<any>[] = [this]
+            let parent = this.parent;
+            while (parent) {
+                dirty.push(parent);
+                parent = parent.parent;
+            }
+
+            refreshStack([this], dirty);
         }
 
-        return refreshStack([this], dirty);
+        return true;
+
+        function mergeParent(parent, value) {
+            parent.update(value, false);
+        }
     }
 }
 
@@ -234,10 +245,10 @@ export class Store<T> extends Value<T> {
         }
     }
 
-    update = (value: T) => {
+    update = (value: T, autoRefresh: boolean = true) => {
         if (this.value !== value) {
             this.value = value;
-            this.refresh();
+            autoRefresh && this.refresh();
             return true;
         }
         return false;
@@ -260,7 +271,11 @@ export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
             if (typeof name === "symbol" || name in self)
                 return (self as any)[name];
 
-            return asProxy(parent.property(name));
+            var result = parent.property(name);
+            if (typeof result === "function")
+                return result;
+
+            return asProxy(result);
         },
         set<K extends keyof T>(parent: Value<T>, name: K, value: T[K]) {
             return parent.property(name).update(value);

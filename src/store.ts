@@ -2,11 +2,6 @@
 
 type Unsubscribable = { unsubscribe() }
 type Subscription = Unsubscribable;
-type Parent = {
-    properties: IExpression<any>[];
-    set(path: (number | string)[], value): boolean;
-    value?: any;
-}
 type Action<T> = (value: T) => void;
 
 interface Operator<T, R> {
@@ -35,7 +30,7 @@ export interface IExpression<T> {
     iterators?: Iterator<T>[];
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
-    property<K extends keyof T>(propertyName: K, immutable: true): IExpression<T[K]>;
+    property<K extends keyof T>(propertyName: K, freeze: true): IExpression<T[K]>;
 
     subscribe(next: (value: T) => void): Unsubscribable;
     subscribe(observer: NextObserver<T>): Unsubscribable;
@@ -59,13 +54,13 @@ export interface IProperty<T> extends IExpression<T> {
 }
 
 const empty = "";
-class Value<T> implements IExpression<T> {
+abstract class Value<T> implements IExpression<T> {
 
     public properties: IExpression<T[keyof T]>[] = [];
     public observers: NextObserver<T>[];
     public iterators: Iterator<T>[] = [];
 
-    constructor(public parent: Parent, public value?: T) { }
+    constructor(public parent: Value<any>, public value?: T) { }
 
     subscribe(observer: NextObserver<T> | Action<T>): Subscription {
         if (typeof observer === "function") {
@@ -91,7 +86,7 @@ class Value<T> implements IExpression<T> {
         } as Subscription
     }
 
-    get <K extends keyof T>(propertyName: K): IProperty<T[K]> {
+    get<K extends keyof T>(propertyName: K): IProperty<T[K]> {
         const { properties } = this;
         let i = properties.length;
         while (i--) {
@@ -103,16 +98,16 @@ class Value<T> implements IExpression<T> {
     }
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
-    property<K extends keyof T>(propertyName: K, immutable: true): IExpression<T[K]>;
-    property<K extends keyof T>(propertyName: K, immutable?: true) {
-        const prop = !immutable && this.get(propertyName);
+    property<K extends keyof T>(propertyName: K, freeze: true): IExpression<T[K]>;
+    property<K extends keyof T>(propertyName: K, freeze?: true) {
+        const prop = !freeze && this.get(propertyName);
         if (prop) return prop;
 
         var parentValue = this.value;
         var initValue = parentValue ? parentValue[propertyName] : void 0;
 
-        const property = immutable 
-            ? new Value<T[K]>(this, initValue)
+        const property = freeze
+            ? new FrozenValue<T[K]>(this, initValue)
             : new ObjectProperty<T[K]>(this, propertyName as string, initValue);
         this.properties.push(property as any);
         return property;
@@ -126,21 +121,6 @@ class Value<T> implements IExpression<T> {
             return empty;
         else
             return value.toString();
-    }
-
-    set(path: (number | string)[], value): boolean {
-        if (path.length === 0 || !this.value) {
-            throw new Error("Invalid");
-        }
-        const first = path[0];
-        const current = this.value[first]
-        const newValue =mergeObject(current, path.slice(1), value);
-        if (newValue !== current) {
-            this.value[first] = newValue;
-            refresh(this);
-            return true;
-        }
-        return false;
     }
 
     asProxy(): ProxyOf<T> {
@@ -170,6 +150,21 @@ class Value<T> implements IExpression<T> {
             properties.splice(idx, 1);
         }
     }
+
+    refresh() {
+        return refreshStack([this]);
+    }
+}
+
+class FrozenValue<T> extends Value<T> {
+    constructor(parent: Value<any>, value: T) {
+        super(parent, value);
+    }
+
+    valueFrom() {
+        // ignore updates
+        return this.value;
+    }
 }
 
 type ArrayMutation = (
@@ -188,28 +183,31 @@ type NextArrayMutationsObserver<T> = {
 };
 
 class ObjectProperty<T> extends Value<T> implements IProperty<T> {
-    constructor(parent: Parent, public name: string | number, value?: T) {
+    constructor(parent: Value<any>, public name: string | number, value?: T) {
         super(parent, value);
     }
 
-    refresh(parentValue) {
-        var name = this.name,
-            newValue = parentValue ? parentValue[name] : void 0;
-
-        if (newValue !== this.value) {
-            this.value = newValue;
-            return true;
-        }
-
-        return false;
+    valueFrom(parentValue) {
+        return parentValue && parentValue[this.name];
     }
 
     update = (value: T) => {
-        return this.parent.set([this.name], value);
-    }
+        if (value === this.value)
+            return false;
+        this.value = value;
+        const parentValue = this.parent.value;
+        if (parentValue) {
+            parentValue[this.name] = value;
+        }
 
-    set(path: string[], value: T): boolean {
-        return this.parent.set([this.name, ...path], value);
+        const dirty: Value<any>[] = [this]
+        let parent = this.parent;
+        while (parent) {
+            dirty.push(parent);
+            parent = parent.parent;
+        }
+
+        return refreshStack([this], dirty);
     }
 }
 
@@ -220,7 +218,6 @@ export class Store<T> extends Value<T> {
 
     expr(expr: string) {
         var parts = expr.split('.');
-        console.log(parts)
         return (value) => {
             var obj = this.value;
             var len = parts.length - 1;
@@ -240,48 +237,16 @@ export class Store<T> extends Value<T> {
     update = (value: T) => {
         if (this.value !== value) {
             this.value = value;
-            this.autoRefresh && this.refresh();
+            this.refresh();
             return true;
         }
-        return false;
-    }
-
-    set(path: (number | string)[], value): boolean {
-        const newValue = mergeObject(this.value, path, value);
-        if (newValue !== this.value) {
-            this.value = newValue;
-            if (this.autoRefresh) {
-                this.refresh();
-            }
-            return true;
-        }
-
         return false;
     }
 
     refresh() {
-        return refresh(this);
+        return this.autoRefresh && refreshStack([this]);
     }
 
-}
-
-
-function mergeObject(parent: any, path: (string | number)[], value: any) {
-    if (path.length === 0) {
-        return value;
-    }
-    const property = path[0]
-
-    if (parent === null || parent === undefined)
-        return { [property]: value };
-
-    const current = parent[property];
-    const newValue = path.length ? mergeObject(current, path.slice(1), value) : value;
-    if (current === newValue) {
-        return parent;
-    } else {
-        return { ...parent, [property]: newValue };
-    }
 }
 
 export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
@@ -315,26 +280,14 @@ export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
 export default Store;
 
 class ValueObserver<T, U> extends Value<U> {
-    constructor(parent: Parent, public project: (newValue: T, prevValue: U) => U, initValue) {
+    constructor(parent: Value<any>, public valueFrom: (newValue: T, prevValue: U) => U, initValue) {
         super(parent, initValue);
-    }
-
-    refresh(parentValue: T) {
-        var result = this.project(parentValue, this.value)
-        if (result !== this.value) {
-            this.value = result;
-            return true;
-        } else {
-            return false;
-        }
     }
 }
 
-function refresh<T>(root: Value<T>): boolean {
-    var stack: { properties, value?, iterators?}[] = [root];
+function refreshStack(stack: { properties, value?}[], dirty: Value<any>[] = []): boolean {
     var stackLength: number = 1;
-    var dirty: IProperty<any>[] = [];
-    var dirtyLength: number = 0;
+    var dirtyLength: number = (dirty && dirty.length) | 0;
 
     while (stackLength--) {
         const parent = stack[stackLength];
@@ -348,7 +301,10 @@ function refresh<T>(root: Value<T>): boolean {
             stack[stackLength] = child;
             stackLength = (stackLength + 1) | 0;
 
-            if (child.refresh && child.refresh(parentValue)) {
+            const prevValue = child.value;
+            const childValue = child.valueFrom(parentValue, prevValue);
+            if (prevValue !== childValue) {
+                child.value = childValue;
                 dirty[dirtyLength] = child;
                 dirtyLength = (dirtyLength + 1) | 0;
             }
@@ -358,19 +314,10 @@ function refresh<T>(root: Value<T>): boolean {
     var j = dirtyLength;
     while (j--) {
         const property = dirty[j];
-        const { observers } = property;
+        const observers = property.observers;
         if (!observers) continue;
-        const { value } = property;
+        const value = property.value;
         var e = observers.length | 0;
-        while (e--) {
-            let observer = observers[e];
-            observer.next(value);
-        }
-    }
-
-    if (dirtyLength) {
-        const { observers, value } = root;
-        var e = (observers && observers.length) | 0;
         while (e--) {
             let observer = observers[e];
             observer.next(value);
@@ -379,3 +326,4 @@ function refresh<T>(root: Value<T>): boolean {
 
     return dirtyLength > 0;
 }
+

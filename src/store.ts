@@ -62,7 +62,7 @@ abstract class Value<T> implements IExpression<T> {
 
     constructor(public parent: Value<any>, public value?: T) { }
 
-    subscribe(observer: NextObserver<T> | Action<T>): Subscription {
+    subscribe = (observer: NextObserver<T> | Action<T>) => {
         if (typeof observer === "function") {
             return this.subscribe({ next: observer });
         }

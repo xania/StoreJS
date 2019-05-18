@@ -5,8 +5,10 @@ type ArrayMutation = (
 );
 
 export default function arrayComparer<T extends any[]>(newArray: T, prevValue: T): ArrayMutation[] {
+    debugger;
+    
     if (!prevValue) {
-        return newArray ? newArray.map((p, i) => ({ type: "insert", index: i })) : [];
+        return newArray && typeof newArray.map === "function" ? newArray.map((p, i) => ({ type: "insert", index: i })) : [];
     }
 
     let newLength = (newArray && newArray['length']) || 0,

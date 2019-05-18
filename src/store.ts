@@ -15,7 +15,7 @@ export interface NextObserver<T> {
 export type Subscribable<T> = { subscribe(observer: NextObserver<T> | Action<T>): Unsubscribable; };
 export type Observable<T> = Subscribable<T> & { lift<R>(operator: Operator<T, R>): Observable<R>; };
 type ItemOf<T> = T extends any[] ? T[number] : T;
-type ProxyOf<T> =
+export type ProxyOf<T> =
     { [K in keyof T]: T[K] extends (...args: any) => any ? T[K] : ProxyOf<T[K]> } &
     Observable<T> &
     {

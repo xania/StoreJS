@@ -2,9 +2,14 @@ type ObjectType = "string" | "number" | "bigint" | "boolean" | "undefined" | "ob
 type PrimitiveType = "string" | "number" | "bigint" | "boolean" | "undefined" | null
 
 export default function diff(from, to) {
-    if (isPrimitive(to) || isPrimitive(from)) {
+    const toType = typeOf(to);
+    const fromType = typeOf(from);
+    if (toType === null || toType !== fromType) {
         return to;
     }
+
+    if (toType === "array")
+        return to.map( (e, i) => diff(from[i], e) );
 
     const result = {};
 
@@ -34,10 +39,12 @@ export default function diff(from, to) {
     return result;
 }
 
-function isPrimitive(value: any): value is PrimitiveType {
-    if (value === null)
-        return true;
+function typeOf(value: any) {
+    if (value === null || value === undefined)
+        return null;
 
-    var toType = typeof value;
-    return (toType === "boolean" || toType === "number" || toType === "string" || toType === "bigint" || toType === "undefined");
+    if (Array.isArray(value))
+        return "array";
+
+    return typeof value;
 }

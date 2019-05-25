@@ -5,7 +5,6 @@ type ArrayMutation = (
 );
 
 export default function arrayComparer<T extends any[]>(newArray: T, prevValue: T): ArrayMutation[] {
-    debugger;
     
     if (!prevValue) {
         return newArray && typeof newArray.map === "function" ? newArray.map((p, i) => ({ type: "insert", index: i })) : [];

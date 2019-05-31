@@ -165,6 +165,16 @@ class FrozenValue<T> extends Value<T> {
         // ignore updates
         return this.value;
     }
+
+    dispose() {
+        super.dispose();
+
+        const idx = this.parent.value.indexOf(this.value);
+        if (idx >= 0) {
+            this.parent.value.splice(idx, 1);
+            refreshStack([this.parent]);
+        }
+    }
 }
 
 type ArrayMutation = (

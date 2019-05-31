@@ -8,6 +8,10 @@ export default function diff(from, to) {
         return to;
     }
 
+    if (toType === "string" || toType === "number" || toType === "bigint" || toType === "boolean" || toType === "undefined") {
+        return to;
+    }
+
     if (toType === "array")
         return to.map( (e, i) => diff(from[i], e) );
 

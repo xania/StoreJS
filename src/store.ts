@@ -1,20 +1,6 @@
 // import bestSeq, { lcs } from "./lcs"
+import { Observable, NextObserver, Unsubscribable, Action, Subscription } from "./rx-abstraction";
 
-type Unsubscribable = { unsubscribe() }
-type Subscription = Unsubscribable;
-type Action<T> = (value: T) => void;
-
-interface Operator<T, R> {
-    (source: T): R;
-}
-
-export interface NextObserver<T> {
-    next: (value: T) => void;
-}
-
-export type Subscribable<T> = { subscribe(observer: NextObserver<T> | Action<T>): Unsubscribable; };
-export type Observable<T> = Subscribable<T> & { lift<R>(operator: Operator<T, R>): Observable<R>; };
-type ItemOf<T> = T extends any[] ? T[number] : T;
 export type ProxyOf<T> =
     { [K in keyof T]: T[K] extends (...args: any) => any ? T[K] : ProxyOf<T[K]> } &
     Observable<T> &

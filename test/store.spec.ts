@@ -1,5 +1,5 @@
-// import Store from "../src/store";
-// import diff from "../src/diff";
+import Store from "../src/store";
+import diff from "../src/diff";
 
 // interface Person {
 //   firstName: string,

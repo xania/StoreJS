@@ -158,7 +158,15 @@ class FrozenValue<T> extends Value<T> {
         const idx = this.parent.value.indexOf(this.value);
         if (idx >= 0) {
             this.parent.value.splice(idx, 1);
-            refreshStack([this.parent]);
+
+            let parent = this.parent;
+            const dirty: Value<any>[] = [];
+            while (parent) {
+                dirty.push(parent);
+                parent = parent.parent;
+            }
+
+            refreshStack([this.parent], dirty);
         }
     }
 }
@@ -297,7 +305,7 @@ class ValueObserver<T, U> extends Value<U> {
 }
 
 function refreshStack(stack: { properties, value?}[], dirty: Value<any>[] = []): boolean {
-    var stackLength: number = 1;
+    var stackLength: number = stack.length;
     var dirtyLength: number = (dirty && dirty.length) | 0;
 
     while (stackLength--) {

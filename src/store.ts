@@ -58,8 +58,7 @@ abstract class Value<T> implements IExpression<T> {
             return this.subscribe({ next: observer });
         }
 
-        if (this.value !== void 0)
-            observer.next(this.value);
+        observer.next(this.value);
 
         var observers = this.observers;
         if (observers) {

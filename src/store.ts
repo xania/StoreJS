@@ -2,9 +2,12 @@
 import { Observable, NextObserver, Unsubscribable, Action, Subscription } from "./rx-abstraction";
 
 export type ProxyOf<T> =
-    { [K in keyof T]: T[K] extends (...args: any) => any ? T[K] : ProxyOf<T[K]> } &
+    {
+        [K in keyof T]: T[K] extends (...args: any) => any ? T[K] : ProxyOf<T[K]>
+    } &
     Observable<T> &
     {
+        valueOf(): T;
         update?(value: T): boolean;
         value: T;
     };
@@ -14,6 +17,7 @@ export interface IExpression<T> {
     observers?: NextObserver<T>[];
     properties: IExpression<T[keyof T]>[];
     iterators?: Iterator<T>[];
+    valueOf(): T;
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
     property<K extends keyof T>(propertyName: K, freeze: true): IExpression<T[K]>;
@@ -43,6 +47,7 @@ const empty = "";
 abstract class Value<T> implements IExpression<T> {
 
     public properties: IExpression<T[keyof T]>[] = [];
+    public lifters: IExpression<T[keyof T]>[] = [];
     public observers: NextObserver<T>[];
     public iterators: Iterator<T>[] = [];
 
@@ -124,8 +129,8 @@ abstract class Value<T> implements IExpression<T> {
 
     lift<U>(comparer: (newValue: T, prevValue: U) => U): ValueObserver<T, U> {
         const p = new ValueObserver(this, comparer, comparer(this.value, null));
-        const { properties } = this;
-        properties.push(p as any);
+        const { lifters } = this;
+        lifters.push(p as any);
         return p;
     }
 
@@ -208,14 +213,14 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
         }
 
         if (autoRefresh) {
-            const dirty: Value<any>[] = [this]
-            let parent = this.parent;
+            const invalidated: any[] = []
+            let parent: any = this;
             while (parent) {
-                dirty.push(parent);
+                invalidated.push(parent);
                 parent = parent.parent;
             }
 
-            refreshStack([this], dirty);
+            refreshMany(invalidated)
         }
 
         return true;
@@ -345,4 +350,43 @@ function refreshStack(stack: { properties, value?}[], dirty: Value<any>[] = []):
 
     return dirtyLength > 0;
 }
+
+// TODO refactor / merge with refreshStack
+function refreshMany(list: any[]) {
+    var listLength: number = list.length;
+    var dirtyLength: number = 0;
+    var dirty: any[] = [];
+
+    while (listLength--) {
+        const item = list[listLength];
+        const itemValue = item.value;
+
+        const { lifters, observers } = item;
+        if (observers) {
+            var e = observers.length | 0;
+            while (e--) {
+                let observer = observers[e];
+                observer.next(itemValue);
+            }
+        }
+
+
+        let i: number = lifters.length | 0;
+        while (i) {
+            i = (i - 1) | 0;
+            var child = lifters[i];
+            list[listLength] = child;
+            listLength = (listLength + 1) | 0;
+
+            const prevValue = child.value;
+            const childValue = child.valueFrom(itemValue, prevValue);
+            if (prevValue !== childValue) {
+                child.value = childValue;
+                dirty[dirtyLength] = child;
+                dirtyLength = (dirtyLength + 1) | 0;
+            }
+        }
+    }
+}
+
 

@@ -140,10 +140,6 @@ abstract class Value<T> implements IExpression<T> {
             properties.splice(idx, 1);
         }
     }
-
-    refresh() {
-        return refreshStack([this]);
-    }
 }
 
 class FrozenValue<T> extends Value<T> {
@@ -164,13 +160,15 @@ class FrozenValue<T> extends Value<T> {
             this.parent.value.splice(idx, 1);
 
             let parent = this.parent;
-            const dirty: Value<any>[] = [];
+            const dirty = refresh(this.parent)
+            // const dirty: Value<any>[] = [];
             while (parent) {
                 dirty.push(parent);
                 parent = parent.parent;
             }
 
-            refreshStack([this.parent], dirty);
+            flush(dirty);
+            // refreshStack([this.parent], dirty);
         }
     }
 }
@@ -219,7 +217,7 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
                 parent = parent.parent;
             }
 
-            refreshMany(invalidated)
+            flush(invalidated)
         }
 
         return true;
@@ -263,7 +261,7 @@ export class Store<T> extends Value<T> {
     }
 
     refresh() {
-        return this.autoRefresh && refreshStack([this]);
+        return this.autoRefresh && refresh(this);
     }
 
 }
@@ -308,56 +306,44 @@ class ValueObserver<T, U> extends Value<U> {
     }
 }
 
-function refreshStack(stack: { properties, value?}[], dirty: Value<any>[] = []): boolean {
+
+function refresh(root: { properties, value?}): any[] {
+    var stack = [ root ];
     var stackLength: number = stack.length;
-    var dirtyLength: number = (dirty && dirty.length) | 0;
+    var dirtyLength: number = 0;
+    var dirty = [];
 
     while (stackLength--) {
         const parent = stack[stackLength];
         const parentValue = parent.value;
 
-        var properties = parent.properties;
-        let i: number = properties.length | 0;
-        while (i) {
-            i = (i - 1) | 0;
-            var child = properties[i];
-            stack[stackLength] = child;
+        var { properties } = parent;
+        let pi: number = properties.length | 0;
+        while (pi) {
+            pi = (pi - 1) | 0;
+            var prop = properties[pi];
+            stack[stackLength] = prop;
             stackLength = (stackLength + 1) | 0;
 
-            const prevValue = child.value;
-            const childValue = child.valueFrom(parentValue, prevValue);
+            const prevValue = prop.value;
+            const childValue = prop.valueFrom(parentValue, prevValue);
             if (prevValue !== childValue) {
-                child.value = childValue;
-                dirty[dirtyLength] = child;
+                prop.value = childValue;
+                dirty[dirtyLength] = prop;
                 dirtyLength = (dirtyLength + 1) | 0;
             }
         };
     }
 
-    var j = dirtyLength;
-    while (j--) {
-        const property = dirty[j];
-        const observers = property.observers;
-        if (!observers) continue;
-        const value = property.value;
-        var e = observers.length | 0;
-        while (e--) {
-            let observer = observers[e];
-            observer.next(value);
-        }
-    }
-
-    return dirtyLength > 0;
+    return dirty;
 }
 
 // TODO refactor / merge with refreshStack
-function refreshMany(list: any[]) {
-    var listLength: number = list.length;
-    var dirtyLength: number = 0;
-    var dirty: any[] = [];
+function flush(dirty: any[]) {
+    var listLength: number = dirty.length;
 
     while (listLength--) {
-        const item = list[listLength];
+        const item = dirty[listLength];
         const itemValue = item.value;
 
         const { lifters, observers } = item;
@@ -368,21 +354,20 @@ function refreshMany(list: any[]) {
                 observer.next(itemValue);
             }
         }
+        if (lifters) {
+            let i = lifters.length | 0;
+            while (i) {
+                i = (i - 1) | 0;
+                var mapper = lifters[i];
 
-
-        let i: number = lifters.length | 0;
-        while (i) {
-            i = (i - 1) | 0;
-            var child = lifters[i];
-            list[listLength] = child;
-            listLength = (listLength + 1) | 0;
-
-            const prevValue = child.value;
-            const childValue = child.valueFrom(itemValue, prevValue);
-            if (prevValue !== childValue) {
-                child.value = childValue;
-                dirty[dirtyLength] = child;
-                dirtyLength = (dirtyLength + 1) | 0;
+                const prevValue = mapper.value;
+                const childValue = mapper.valueFrom(itemValue, prevValue);
+                if (prevValue !== childValue) {
+                    mapper.value = childValue;
+                    // push to list
+                    dirty[listLength] = mapper;
+                    listLength = (listLength + 1) | 0;
+                }
             }
         }
     }

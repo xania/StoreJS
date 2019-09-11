@@ -159,9 +159,9 @@ class FrozenValue<T> extends Value<T> {
         if (idx >= 0) {
             this.parent.value.splice(idx, 1);
 
-            let parent = this.parent;
-            const dirty = refresh(this.parent)
+            const dirty = refresh(this.parent);
             // const dirty: Value<any>[] = [];
+            let parent = this.parent;
             while (parent) {
                 dirty.push(parent);
                 parent = parent.parent;
@@ -210,14 +210,13 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
         }
 
         if (autoRefresh) {
-            const invalidated: any[] = []
+            const dirty = refresh(this);
             let parent: any = this;
-            while (parent) {
-                invalidated.push(parent);
+            while(parent) {
+                dirty.push(parent);
                 parent = parent.parent;
             }
-
-            flush(invalidated)
+            flush(dirty);
         }
 
         return true;
@@ -254,14 +253,24 @@ export class Store<T> extends Value<T> {
     update = (value: T, autoRefresh: boolean = true) => {
         if (this.value !== value) {
             this.value = value;
-            autoRefresh && this.refresh();
+
+            if (autoRefresh) {
+                const dirty = refresh(this);
+                dirty.push(this);
+                flush(dirty);
+            }
             return true;
         }
         return false;
     }
 
     refresh() {
-        return this.autoRefresh && refresh(this);
+        const dirty = refresh(this);
+        if (dirty.length) {
+            flush(dirty);
+            return true;
+        }
+        return false;
     }
 
 }
@@ -307,21 +316,45 @@ class ValueObserver<T, U> extends Value<U> {
 }
 
 
-function refresh(root: { properties, value?}): any[] {
-    var stack = [ root ];
+const __dirtySym = Symbol("dirty");
+function refresh(root: { properties, value?, lifters }): any[] {
+    var stack = [root];
     var stackLength: number = stack.length;
     var dirtyLength: number = 0;
     var dirty = [];
+    parent[__dirtySym] = false;
 
     while (stackLength--) {
         const parent = stack[stackLength];
         const parentValue = parent.value;
 
-        var { properties } = parent;
-        let pi: number = properties.length | 0;
-        while (pi) {
-            pi = (pi - 1) | 0;
-            var prop = properties[pi];
+        var { properties, lifters } = parent;
+
+        if (lifters) {
+            let liftIdx = lifters.length | 0;
+            while (liftIdx) {
+                liftIdx = (liftIdx - 1) | 0;
+                var mapper = lifters[liftIdx];
+
+                const prevValue = mapper.value;
+                const childValue = mapper.valueFrom(parentValue, prevValue);
+                if (prevValue !== childValue) {
+                    mapper.value = childValue;
+                    // mark as dirty
+                    dirty[dirtyLength] = mapper;
+                    dirtyLength = (dirtyLength + 1) | 0;
+                    // recurse
+                    stack[stackLength] = mapper;
+                    stackLength = (stackLength + 1) | 0;
+                }
+            }
+        }
+
+        let propIdx: number = properties.length | 0;
+        while (propIdx) {
+            propIdx = (propIdx - 1) | 0;
+            var prop = properties[propIdx];
+            prop[__dirtySym] = false;
             stack[stackLength] = prop;
             stackLength = (stackLength + 1) | 0;
 
@@ -329,12 +362,18 @@ function refresh(root: { properties, value?}): any[] {
             const childValue = prop.valueFrom(parentValue, prevValue);
             if (prevValue !== childValue) {
                 prop.value = childValue;
-                dirty[dirtyLength] = prop;
-                dirtyLength = (dirtyLength + 1) | 0;
+                prop[__dirtySym] = true;
+                do {
+                    dirty[dirtyLength] = prop;
+                    dirtyLength = (dirtyLength + 1) | 0;
+                    prop = prop.parent;
+                }
+                while(prop && !prop[__dirtySym]);
             }
         };
     }
 
+    // expand with parents
     return dirty;
 }
 
@@ -352,22 +391,6 @@ function flush(dirty: any[]) {
             while (e--) {
                 let observer = observers[e];
                 observer.next(itemValue);
-            }
-        }
-        if (lifters) {
-            let i = lifters.length | 0;
-            while (i) {
-                i = (i - 1) | 0;
-                var mapper = lifters[i];
-
-                const prevValue = mapper.value;
-                const childValue = mapper.valueFrom(itemValue, prevValue);
-                if (prevValue !== childValue) {
-                    mapper.value = childValue;
-                    // push to list
-                    dirty[listLength] = mapper;
-                    listLength = (listLength + 1) | 0;
-                }
             }
         }
     }

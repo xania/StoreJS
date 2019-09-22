@@ -155,7 +155,12 @@ class FrozenValue<T> extends Value<T> {
     dispose() {
         super.dispose();
 
-        const idx = this.parent.value.indexOf(this.value);
+        
+        const idx = this.parent.value && this.parent.value.indexOf
+            ? this.parent.value.indexOf(this.value)
+            : -1
+            ;
+            
         if (idx >= 0) {
             this.parent.value.splice(idx, 1);
 

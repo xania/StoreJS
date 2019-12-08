@@ -16,7 +16,7 @@ export interface IExpression<T> {
     value?: T;
     observers?: NextObserver<T>[];
     properties: IExpression<T[keyof T]>[];
-    iterators?: Iterator<T>[];
+    // iterators?: Iterator<T>[];
     valueOf(): T;
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
@@ -27,7 +27,7 @@ export interface IExpression<T> {
     // flatMap<U>(selector: Selector<IExpression<ItemOf<T>>, IExpression<U[]>>): IExpression<U[]> ;
     // map(action: Action<IExpression<T>>);
     // iterations : Iteration<T, Subscription>[];
-    iterator?(): Iterator<T>;
+    // iterator?(): Iterator<T>;
     update?(value: T): boolean;
     /**
      * maps value of this expressions of type T to type U
@@ -47,9 +47,9 @@ const empty = "";
 abstract class Value<T> implements IExpression<T> {
 
     public properties: IExpression<T[keyof T]>[] = [];
-    public lifters: IExpression<T[keyof T]>[] = [];
+//     public lifters: IExpression<T[keyof T]>[] = [];
     public observers: NextObserver<T>[];
-    public iterators: Iterator<T>[] = [];
+    // public iterators: Iterator<T>[] = [];
 
     constructor(public parent: Value<any>, public value?: T) { }
 
@@ -128,8 +128,10 @@ abstract class Value<T> implements IExpression<T> {
 
     lift<U>(comparer: (newValue: T, prevValue: U) => U): ValueObserver<T, U> {
         const p = new ValueObserver(this, comparer, comparer(this.value, null));
-        const { lifters } = this;
-        lifters.push(p as any);
+        // const { lifters } = this;
+        // lifters.push(p as any);
+        const { properties } = this;
+        properties.push(p as any);
         return p;
     }
 
@@ -155,12 +157,12 @@ class FrozenValue<T> extends Value<T> {
     dispose() {
         super.dispose();
 
-        
+
         const idx = this.parent.value && this.parent.value.indexOf
             ? this.parent.value.indexOf(this.value)
             : -1
             ;
-            
+
         if (idx >= 0) {
             this.parent.value.splice(idx, 1);
 
@@ -217,7 +219,7 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
         if (autoRefresh) {
             const dirty = refresh(this);
             let parent: any = this;
-            while(parent) {
+            while (parent) {
                 dirty.push(parent);
                 parent = parent.parent;
             }
@@ -320,62 +322,36 @@ class ValueObserver<T, U> extends Value<U> {
     }
 }
 
-
-const __dirtySym = Symbol("dirty");
-function refresh(root: { properties, value?, lifters }): any[] {
+function refresh(root: { properties, value? }): any[] {
     var stack = [root];
     var stackLength: number = stack.length;
     var dirtyLength: number = 0;
     var dirty = [];
-    parent[__dirtySym] = false;
 
     while (stackLength--) {
         const parent = stack[stackLength];
         const parentValue = parent.value;
 
-        var { properties, lifters } = parent;
+        var { properties } = parent;
 
-        if (lifters) {
-            let liftIdx = lifters.length | 0;
-            while (liftIdx) {
-                liftIdx = (liftIdx - 1) | 0;
-                var mapper = lifters[liftIdx];
+        if (properties) {
+            let propIdx: number = properties.length | 0;
+            while (propIdx) {
+                propIdx = (propIdx - 1) | 0;
+                var prop = properties[propIdx];
+                //recurse
+                stack[stackLength] = prop;
+                stackLength = (stackLength + 1) | 0;
 
-                const prevValue = mapper.value;
-                const childValue = mapper.valueFrom(parentValue, prevValue);
+                const prevValue = prop.value;
+                const childValue = prop.valueFrom(parentValue, prevValue);
                 if (prevValue !== childValue) {
-                    mapper.value = childValue;
-                    // mark as dirty
-                    dirty[dirtyLength] = mapper;
-                    dirtyLength = (dirtyLength + 1) | 0;
-                    // recurse
-                    stack[stackLength] = mapper;
-                    stackLength = (stackLength + 1) | 0;
-                }
-            }
-        }
-
-        let propIdx: number = properties.length | 0;
-        while (propIdx) {
-            propIdx = (propIdx - 1) | 0;
-            var prop = properties[propIdx];
-            prop[__dirtySym] = false;
-            stack[stackLength] = prop;
-            stackLength = (stackLength + 1) | 0;
-
-            const prevValue = prop.value;
-            const childValue = prop.valueFrom(parentValue, prevValue);
-            if (prevValue !== childValue) {
-                prop.value = childValue;
-                prop[__dirtySym] = true;
-                do {
+                    prop.value = childValue;
                     dirty[dirtyLength] = prop;
                     dirtyLength = (dirtyLength + 1) | 0;
-                    prop = prop.parent;
                 }
-                while(prop && !prop[__dirtySym]);
-            }
-        };
+            };
+        }
     }
 
     // expand with parents
@@ -390,7 +366,7 @@ function flush(dirty: any[]) {
         const item = dirty[listLength];
         const itemValue = item.value;
 
-        const { lifters, observers } = item;
+        const { observers } = item;
         if (observers) {
             var e = observers.length | 0;
             while (e--) {

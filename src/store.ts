@@ -1,12 +1,12 @@
 // import bestSeq, { lcs } from "./lcs"
-import { Observable, NextObserver, Unsubscribable, Action, Subscription } from "./rx-abstraction";
+import { Observable, PartialObserver, Unsubscribable, Action, Subscription } from "./rx-abstraction";
 
 export type ProxyOf<T> =
     {
         [K in keyof T]: T[K] extends (...args: any) => any ? T[K] : ProxyOf<T[K]>
-    } &
-    Observable<T> &
-    {
+    }
+    & Observable<T>
+    & {
         valueOf(): T;
         update?(value: T): boolean;
         value: T;
@@ -14,27 +14,18 @@ export type ProxyOf<T> =
 
 export interface IExpression<T> {
     value?: T;
-    observers?: NextObserver<T>[];
+    observers?: PartialObserver<T>[];
     properties: IExpression<T[keyof T]>[];
-    // iterators?: Iterator<T>[];
     valueOf(): T;
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
     property<K extends keyof T>(propertyName: K, freeze: true): IExpression<T[K]>;
 
     subscribe(next: (value: T) => void): Unsubscribable;
-    subscribe(observer: NextObserver<T>): Unsubscribable;
-    // flatMap<U>(selector: Selector<IExpression<ItemOf<T>>, IExpression<U[]>>): IExpression<U[]> ;
-    // map(action: Action<IExpression<T>>);
-    // iterations : Iteration<T, Subscription>[];
-    // iterator?(): Iterator<T>;
+    subscribe(observer: PartialObserver<T>): Unsubscribable;
+
     update?(value: T): boolean;
-    /**
-     * maps value of this expressions of type T to type U
-     * and emits distinct values of U
-     * @param project projects value of T to U 
-     */
-    lift<U>(project: (value: T, prev) => U): ValueObserver<T, U>;
+    lift<U>(project: (value: T, prev?: U) => U): ValueObserver<T, U>;
     dispose();
 }
 
@@ -43,17 +34,23 @@ export interface IProperty<T> extends IExpression<T> {
     update(value: T): boolean;
 }
 
+const observable = typeof Symbol === 'function' && Symbol.observable || '@@observable';
+
 const empty = "";
 abstract class Value<T> implements IExpression<T> {
 
     public properties: IExpression<T[keyof T]>[] = [];
 //     public lifters: IExpression<T[keyof T]>[] = [];
-    public observers: NextObserver<T>[];
+    public observers: PartialObserver<T>[];
     // public iterators: Iterator<T>[] = [];
 
     constructor(public parent: Value<any>, public value?: T) { }
 
-    subscribe = (observer: NextObserver<T> | Action<T>) => {
+    [observable]() {
+        return this;
+    }
+
+    subscribe = (observer: PartialObserver<T> | Action<T>) => {
         if (typeof observer === "function") {
             return this.subscribe({ next: observer });
         }
@@ -73,7 +70,7 @@ abstract class Value<T> implements IExpression<T> {
                 var idx = observers.indexOf(observer);
                 observers.splice(idx, 1);
             }
-        } as Subscription
+        } as Unsubscribable
     }
 
     get<K extends keyof T>(propertyName: K): IProperty<T[K]> {

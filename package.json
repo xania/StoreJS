@@ -8,6 +8,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "compile": "tsc"
   },
+  "man": [ "./src/store" ],
+  "module": "./src/store",
   "author": "Ibrahim ben Salah",
   "license": "MIT"
 }

@@ -1,6 +1,9 @@
 export interface Subscribable<T> {
-    subscribe(observer: NextObserver<T> | Action<T>): Unsubscribable;
+    subscribe(observer: PartialObserver<T> | Action<T>): Unsubscribable;
+    subscribe(next?: (value: T) => void, error?: null | undefined, complete?: () => void): Unsubscribable;
 }
+
+
 export interface Observable<T> extends Subscribable<T> { 
     lift<R>(operator: Operator<T, R>): Observable<R>;
 }
@@ -10,8 +13,10 @@ export type Action<T> = (value: T) => void;
 export type Subscription = Unsubscribable;
 export type SubscribableOrPromise<T> = Subscribable<T> | PromiseLike<T>
 
-export interface NextObserver<T> {
-    next: (value: T) => void;
+export interface PartialObserver<T> {
+    next?: (value: T) => void;
+    error?: (err: any) => void;
+    complete?: () => void;
 }
 
 interface Operator<T, R> {

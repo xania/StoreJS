@@ -35,3 +35,11 @@ import diff from "../src/diff";
 //   return x + 1;
 // }
 
+describe("Filter function", () => {
+    test("it should filter by a search term (link)", () => {
+        // actual test
+        diff(null, null);
+        expect(false).toBeFalsy();
+    });
+});
+

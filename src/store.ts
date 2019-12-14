@@ -1,23 +1,21 @@
 // import bestSeq, { lcs } from "./lcs"
 import { Observable, PartialObserver, Unsubscribable, Action, Subscription } from "./rx-abstraction";
 
+type Func = (...args: any) => any;
+
 export type ProxyOf<T> =
     {
-        [K in keyof T]: T[K] extends (...args: any) => any ? T[K] : ProxyOf<T[K]>
+        [K in keyof T]: T[K] extends Func ? T[K] : ProxyOf<T[K]>
     }
     & Observable<T>
     & {
-        valueOf(): T;
         update?(value: T): boolean;
         value: T;
     };
 
 export interface IExpression<T> {
     value?: T;
-    observers?: PartialObserver<T>[];
-    properties: IExpression<T[keyof T]>[];
-    valueOf(): T;
-
+ 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
     property<K extends keyof T>(propertyName: K, freeze: true): IExpression<T[K]>;
 
@@ -124,7 +122,7 @@ abstract class Value<T> implements IExpression<T> {
     }
 
     lift<U>(comparer: (newValue: T, prevValue: U) => U): ValueObserver<T, U> {
-        const p = new ValueObserver(this, comparer, comparer(this.value, null));
+        const p = new ValueObserver(this, comparer, comparer(this.value, undefined));
         // const { lifters } = this;
         // lifters.push(p as any);
         const { properties } = this;
@@ -254,8 +252,18 @@ export class Store<T> extends Value<T> {
         }
     }
 
-    update = (value: T, autoRefresh: boolean = true) => {
-        if (this.value !== value) {
+    update = (value: T | Action<T>, autoRefresh: boolean = true) => {
+        if (typeof value === 'function') {
+            value.apply(null, [ this.value ]);
+
+            if (autoRefresh) {
+                const dirty = refresh(this);
+                dirty.push(this);
+                flush(dirty);
+            }
+            return true;
+        }
+        else if (this.value !== value) {
             this.value = value;
 
             if (autoRefresh) {
@@ -341,7 +349,7 @@ function refresh(root: { properties, value? }): any[] {
                 stackLength = (stackLength + 1) | 0;
 
                 const prevValue = prop.value;
-                const childValue = prop.valueFrom(parentValue, prevValue);
+                const childValue = prevValue === null ?  prop.valueFrom(parentValue) : prop.valueFrom(parentValue, prevValue);
                 if (prevValue !== childValue) {
                     prop.value = childValue;
                     dirty[dirtyLength] = prop;

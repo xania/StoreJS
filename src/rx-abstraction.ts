@@ -3,7 +3,6 @@ export interface Subscribable<T> {
     subscribe(next?: (value: T) => void, error?: null | undefined, complete?: () => void): Unsubscribable;
 }
 
-
 export interface Observable<T> extends Subscribable<T> { 
     lift<R>(operator: Operator<T, R>): Observable<R>;
 }

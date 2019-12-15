@@ -22,15 +22,11 @@ export default function arrayComparer<T>(newArray: T[], prevValue: T[]): ArrayMu
         let next = newArray[n];
         let propIdx: false | number = false;
 
-        if (typeof next === "object") {
-            for (var m = n; m < prevLength; m++) {
-                if (prevValue[m] === next) {
-                    propIdx = m;
-                    break;
-                }
+        for (var m = n; m < prevLength; m++) {
+            if (prevValue[m] === next) {
+                propIdx = m;
+                break;
             }
-        } else if (prevValue[n]) {
-            propIdx = n;
         }
 
         if (propIdx === false) {

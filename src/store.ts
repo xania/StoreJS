@@ -161,7 +161,7 @@ class FrozenValue<T> extends Value<T> {
         if (idx >= 0) {
             this.parent.value.splice(idx, 1);
 
-            const dirty = refresh(this.parent);
+            const dirty = digest(this.parent);
             // const dirty: Value<any>[] = [];
             let parent = this.parent;
             while (parent) {
@@ -212,7 +212,7 @@ class ObjectProperty<T> extends Value<T> implements IProperty<T> {
         }
 
         if (autoRefresh) {
-            const dirty = refresh(this);
+            const dirty = digest(this);
             let parent: any = this;
             while (parent) {
                 dirty.push(parent);
@@ -257,7 +257,7 @@ export class Store<T> extends Value<T> {
             value.apply(null, [ this.value ]);
 
             if (autoRefresh) {
-                const dirty = refresh(this);
+                const dirty = digest(this);
                 dirty.push(this);
                 flush(dirty);
             }
@@ -267,7 +267,8 @@ export class Store<T> extends Value<T> {
             this.value = value;
 
             if (autoRefresh) {
-                const dirty = refresh(this);
+                const dirty = digest(this);
+                // TODO do we still need this?
                 dirty.push(this);
                 flush(dirty);
             }
@@ -276,14 +277,7 @@ export class Store<T> extends Value<T> {
         return false;
     }
 
-    refresh() {
-        const dirty = refresh(this);
-        if (dirty.length) {
-            flush(dirty);
-            return true;
-        }
-        return false;
-    }
+    refresh = refresh
 
 }
 
@@ -327,7 +321,16 @@ class ValueObserver<T, U> extends Value<U> {
     }
 }
 
-function refresh(root: { properties, value? }): any[] {
+export function refresh<T>(root = this) {
+    const dirty = digest(root);
+    if (dirty.length) {
+        flush(dirty);
+        return true;
+    }
+    return false;
+}
+
+function digest(root: { properties, value? }): any[] {
     var stack = [root];
     var stackLength: number = stack.length;
     var dirtyLength: number = 0;

@@ -5,37 +5,36 @@ type ArrayMutation = (
     { type: "move", from: number, to: number }
 );
 
-export default function arrayComparer<T>(newArray: T[], prevValue: T[]): ArrayMutation[] {
+type Comparer<T, U> = (x:T, y:U)=> boolean;
+type MutationHandler<T, U> = {
+    comparer: Comparer<T, U>
+};
+export default function arrayComparer<T, U>(newArray: T[], oldArray: U[], comparer: Comparer<T, U>): ArrayMutation[] {
 
-    if (!prevValue) {
+    if (!oldArray) {
         return newArray && typeof newArray.map === "function" ? newArray.map((p, i) => ({ type: "insert", index: i })) : [];
     }
 
-    let newLength = (newArray && newArray['length']) || 0,
-        prevLength = prevValue.length;
-
-    // bestSeq(properties, parentValue as any, (p, v) => p.value === v, () => {
-    //     // TODO
-    // });
-
+    let newLength = (newArray && newArray['length']) || 0;
+    
     const mutations: ArrayMutation[] = [];
-    let previous = prevValue.slice(0);
+    let previous = oldArray.slice(0);
     for (let n = 0; n < newLength && n < previous.length; n++) {
         let next = newArray[n];
         let fromIdx: false | number = false;
 
         for (let g = n; g < previous.length; g++) {
             const p = previous[g];
-            if (p === next) {
+            if (comparer(next, p)) {
                 fromIdx = g;
                 break;
             }
         }
 
         if (fromIdx === false) {
-            const newIdx = newArray.indexOf(previous[n]);
+            const newIdx = indexOf(newArray, previous[n], comparer);
             if (newIdx >= 0) {
-                previous.splice(n, 0, next);
+                previous.splice(n, 0, null);
                 mutations.push({ type: "insert", index: n })
             } else {
                 mutations.push({ type: "update", index: n })
@@ -56,6 +55,14 @@ export default function arrayComparer<T>(newArray: T[], prevValue: T[]): ArrayMu
     }
 
     return mutations;
+}
+
+function indexOf<T, U>(array: T[], item:U, comparer: Comparer<T, U>) {
+    for(let i=0 ; i<array.length ;i++) {
+        if (comparer(array[i], item))
+            return i;
+    }
+    return -1;
 }
 
 export function move(source: any[], from: number, to: number) {

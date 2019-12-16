@@ -1,5 +1,6 @@
 type ArrayMutation = (
     { type: "insert", index: number } |
+    { type: "update", index: number } |
     { type: "remove", index: number } |
     { type: "move", from: number, to: number }
 );
@@ -19,7 +20,7 @@ export default function arrayComparer<T>(newArray: T[], prevValue: T[]): ArrayMu
 
     const mutations: ArrayMutation[] = [];
     let previous = prevValue.slice(0);
-    for (let n = 0; n < newLength; n++) {
+    for (let n = 0; n < newLength && n < previous.length; n++) {
         let next = newArray[n];
         let fromIdx: false | number = false;
 
@@ -32,13 +33,22 @@ export default function arrayComparer<T>(newArray: T[], prevValue: T[]): ArrayMu
         }
 
         if (fromIdx === false) {
-            previous.splice(n, 0, next);
-            mutations.push({ type: "insert", index: n })
+            const newIdx = newArray.indexOf(previous[n]);
+            if (newIdx >= 0) {
+                previous.splice(n, 0, next);
+                mutations.push({ type: "insert", index: n })
+            } else {
+                mutations.push({ type: "update", index: n })
+            }
         } else if (fromIdx !== n) {
             // move
             move(previous, fromIdx, n);
             mutations.push({ type: "move", from: fromIdx, to: n })
         }
+    }
+
+    for (let i = previous.length; i < newLength; i++) {
+        mutations.push({ type: "insert", index: i })
     }
 
     for (let i = previous.length - 1; i >= newLength; i--) {

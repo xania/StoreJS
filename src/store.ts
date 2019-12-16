@@ -15,7 +15,7 @@ export type ProxyOf<T> =
 
 export interface IExpression<T> {
     value?: T;
- 
+
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
     property<K extends keyof T>(propertyName: K, freeze: true): IExpression<T[K]>;
 
@@ -35,14 +35,20 @@ export interface IProperty<T> extends IExpression<T> {
 const observable = typeof Symbol === 'function' && Symbol.observable || '@@observable';
 
 const empty = "";
+
+interface Parent<T> {
+    value?: T;
+    properties: IExpression<T[keyof T]>[];
+}
+
 abstract class Value<T> implements IExpression<T> {
 
     public properties: IExpression<T[keyof T]>[] = [];
-//     public lifters: IExpression<T[keyof T]>[] = [];
+    //     public lifters: IExpression<T[keyof T]>[] = [];
     public observers: PartialObserver<T>[];
     // public iterators: Iterator<T>[] = [];
 
-    constructor(public parent: Value<any>, public value?: T) { }
+    constructor(public parent: Parent<any>, public value?: T) { }
 
     [observable]() {
         return this;
@@ -166,7 +172,7 @@ class FrozenValue<T> extends Value<T> {
             let parent = this.parent;
             while (parent) {
                 dirty.push(parent);
-                parent = parent.parent;
+                parent = parent['parent']; //.parent;
             }
 
             flush(dirty);
@@ -190,8 +196,8 @@ type NextArrayMutationsObserver<T> = {
     next: ArrayMutationsCallback<T>;
 };
 
-class ObjectProperty<T> extends Value<T> implements IProperty<T> {
-    constructor(parent: Value<any>, public name: string | number, value?: T) {
+export class ObjectProperty<T> extends Value<T> implements IProperty<T> {
+    constructor(parent: Parent<any>, public name: string | number, value?: T) {
         super(parent, value);
     }
 
@@ -254,7 +260,7 @@ export class Store<T> extends Value<T> {
 
     update = (value: T | Action<T>, autoRefresh: boolean = true) => {
         if (typeof value === 'function') {
-            value.apply(null, [ this.value ]);
+            value.apply(null, [this.value]);
 
             if (autoRefresh) {
                 const dirty = digest(this);
@@ -330,7 +336,7 @@ export function refresh<T>(root = this) {
     return false;
 }
 
-function digest(root: { properties, value? }): any[] {
+function digest(root: { properties, value?}): any[] {
     var stack = [root];
     var stackLength: number = stack.length;
     var dirtyLength: number = 0;
@@ -352,7 +358,7 @@ function digest(root: { properties, value? }): any[] {
                 stackLength = (stackLength + 1) | 0;
 
                 const prevValue = prop.value;
-                const childValue = prevValue === null ?  prop.valueFrom(parentValue) : prop.valueFrom(parentValue, prevValue);
+                const childValue = prevValue === null ? prop.valueFrom(parentValue) : prop.valueFrom(parentValue, prevValue);
                 if (prevValue !== childValue) {
                     prop.value = childValue;
                     dirty[dirtyLength] = prop;
@@ -386,3 +392,33 @@ function flush(dirty: any[]) {
 }
 
 
+
+export class ListItem<T> extends Value<T> {
+    constructor(public parent: Parent<any>, public parentValue: T[], public value: T) {
+        super(parent, value);
+    }
+
+    update = (newValue: T, autoRefresh: boolean = true) => {
+        const { value, parent, parentValue } = this;
+
+        if (value === newValue) {
+            return false;
+        }
+
+        const index = parentValue.indexOf(value);
+        if (index < 0)
+            return false;
+
+        parent.value[index] = newValue;
+        parentValue[index] = newValue;
+        this.value = newValue;
+
+        if (autoRefresh) {
+            const dirty = digest(this).concat(digest(parent));
+            dirty.push(this);
+            flush(dirty);
+            return true;
+        }
+        return true;
+    }
+}

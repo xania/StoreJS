@@ -38,7 +38,7 @@ const empty = "";
 
 interface Parent<T> {
     value?: T;
-    properties: IExpression<T[keyof T]>[];
+    properties?: IExpression<T[keyof T]>[];
 }
 
 abstract class Value<T> implements IExpression<T> {
@@ -336,7 +336,7 @@ export function refresh<T>(root = this) {
     return false;
 }
 
-function digest(root: { properties, value?}): any[] {
+export function digest(root: { properties?, value?}): any[] {
     var stack = [root];
     var stackLength: number = stack.length;
     var dirtyLength: number = 0;
@@ -394,27 +394,21 @@ function flush(dirty: any[]) {
 
 
 export class ListItem<T> extends Value<T> {
-    constructor(public parent: Parent<any>, public parentValue: T[], public value: T) {
-        super(parent, value);
+    constructor(public value: T) {
+        super(null, value);
     }
 
     update = (newValue: T, autoRefresh: boolean = true) => {
-        const { value, parent, parentValue } = this;
+        const { value } = this;
 
         if (value === newValue) {
             return false;
         }
 
-        const index = parentValue.indexOf(value);
-        if (index < 0)
-            return false;
-
-        parent.value[index] = newValue;
-        parentValue[index] = newValue;
         this.value = newValue;
 
         if (autoRefresh) {
-            const dirty = digest(this).concat(digest(parent));
+            const dirty = digest(this);
             dirty.push(this);
             flush(dirty);
             return true;

@@ -5,20 +5,20 @@ type ArrayMutation = (
     { type: "move", from: number, to: number }
 );
 
-type Comparer<T, U> = (x:T, y:U)=> boolean;
-type MutationHandler<T, U> = {
-    comparer: Comparer<T, U>
-};
-export default function arrayComparer<T, U>(newArray: T[], oldArray: U[], comparer: Comparer<T, U>): ArrayMutation[] {
+type Comparer<T> = (x:T, y:T)=> boolean;
+const identity = (x, y) => x === y;
+
+export default function arrayComparer<T>(newArray: T[], oldArray: T[], comparer: Comparer<T> = identity): ArrayMutation[] {
 
     if (!oldArray) {
+        debugger;
         return newArray && typeof newArray.map === "function" ? newArray.map((p, i) => ({ type: "insert", index: i })) : [];
     }
 
     let newLength = (newArray && newArray['length']) || 0;
     
     const mutations: ArrayMutation[] = [];
-    let previous = oldArray.slice(0);
+    let previous = oldArray;
     for (let n = 0; n < newLength && n < previous.length; n++) {
         let next = newArray[n];
         let fromIdx: false | number = false;
@@ -34,7 +34,7 @@ export default function arrayComparer<T, U>(newArray: T[], oldArray: U[], compar
         if (fromIdx === false) {
             const newIdx = indexOf(newArray, previous[n], comparer);
             if (newIdx >= 0) {
-                previous.splice(n, 0, null);
+                previous.splice(n, 0, next);
                 mutations.push({ type: "insert", index: n })
             } else {
                 mutations.push({ type: "update", index: n })
@@ -47,17 +47,22 @@ export default function arrayComparer<T, U>(newArray: T[], oldArray: U[], compar
     }
 
     for (let i = previous.length; i < newLength; i++) {
+        previous.push(newArray[i]);
         mutations.push({ type: "insert", index: i })
     }
 
     for (let i = previous.length - 1; i >= newLength; i--) {
+        previous.pop();
         mutations.push({ type: "remove", index: i })
     }
 
+    if (previous.length !== newArray.length)
+        debugger;
+        
     return mutations;
 }
 
-function indexOf<T, U>(array: T[], item:U, comparer: Comparer<T, U>) {
+function indexOf<T>(array: T[], item:T, comparer: Comparer<T>) {
     for(let i=0 ; i<array.length ;i++) {
         if (comparer(array[i], item))
             return i;

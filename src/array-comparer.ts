@@ -11,7 +11,6 @@ const identity = (x, y) => x === y;
 export default function arrayComparer<T>(newArray: T[], oldArray: T[], comparer: Comparer<T> = identity): ArrayMutation[] {
 
     if (!oldArray) {
-        debugger;
         return newArray && typeof newArray.map === "function" ? newArray.map((p, i) => ({ type: "insert", index: i })) : [];
     }
 
@@ -58,7 +57,7 @@ export default function arrayComparer<T>(newArray: T[], oldArray: T[], comparer:
 
     if (previous.length !== newArray.length)
         debugger;
-        
+
     return mutations;
 }
 

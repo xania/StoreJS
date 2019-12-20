@@ -394,7 +394,7 @@ function flush(dirty: any[]) {
 
 
 export class ListItem<T> extends Value<T> {
-    constructor(public value: T) {
+    constructor(public value: T, public index: number) {
         super(null, value);
     }
 

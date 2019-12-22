@@ -1,11 +1,11 @@
 // import bestSeq, { lcs } from "./lcs"
-import { Observable, PartialObserver, Unsubscribable, Action, Subscription } from "./rx-abstraction";
+import { Observable, PartialObserver, Unsubscribable, Action, Subscription, Subscribable, isSubscribable } from "./rx-abstraction";
 
-type Func = (...args: any) => any;
+type Func<T, U> = (a: T) => U;
 
 export type ProxyOf<T> =
     {
-        [K in keyof T]: T[K] extends Func ? T[K] : ProxyOf<T[K]>
+        [K in keyof T]: T[K] extends ((...args: any) => any) ? T[K] : ProxyOf<T[K]>
     }
     & Observable<T>
     & Updatable<T>
@@ -20,14 +20,14 @@ export interface IExpression<T> {
     subscribe(observer: PartialObserver<T>): Unsubscribable;
 
     // update?(value: T): boolean;
-    lift<U>(project: (value: T, prev?: U) => U): ValueObserver<T, U>;
+    lift<U>(project: (value: T, prev?: U) => U): IExpression<U>;
     dispose();
 }
 
 export interface Updatable<T> {
     // name: string | number;
-    update(value: T | Action<T>): boolean;
-    tap (action: Action<T>): boolean;
+    update(value: T | Func<T, T | void>): boolean;
+    tap(action: Action<T>): boolean;
 }
 
 export interface IProperty<T> extends IExpression<T>, Updatable<T> {
@@ -60,7 +60,7 @@ abstract class Value<T> implements IExpression<T> {
         const { value } = this;
         if (value === undefined)
             return false;
-        
+
         action(this.value);
         return true;
     }
@@ -172,7 +172,7 @@ export class ObjectProperty<T> extends Value<T> implements IProperty<T> {
     }
 
     update = (value: T, autoRefresh: boolean = true) => {
-        if (value === this.value)
+        if (value === this.value || value === undefined)
             return false;
         this.value = value;
 
@@ -232,30 +232,37 @@ export class Store<T> extends Value<T> {
     asProxy(): ProxyOf<T> {
         return asProxy(this);
     }
-    
-    update = (value: T | Action<T>, autoRefresh: boolean = true) => {
-        if (typeof value === 'function') {
-            value.apply(null, [this.value]);
 
-            if (autoRefresh) {
-                const dirty = digest(this);
-                dirty.push(this);
-                flush(dirty);
-            }
-            return true;
-        }
-        else if (this.value !== value) {
-            this.value = value;
+    update = (newValue: T | Func<T, T | void>, autoRefresh: boolean = true) => {
+        // ignore undefined
+        if (newValue === undefined)
+            return false;
 
-            if (autoRefresh) {
-                const dirty = digest(this);
-                // TODO do we still need this?
-                dirty.push(this);
-                flush(dirty);
+        const prevValue = this.value;
+        if (prevValue === newValue) {
+            return false;
+        } else if (typeof newValue === 'function') {
+            const retval = newValue.apply(null, [prevValue])
+            // when returned value is undefined 
+            if (retval !== undefined) {
+                if (retval === prevValue)
+                    return false;
+                this.value = retval;
+            } else {
+                // assume prevValue is being mutated (e.g a new item is pushed to list)
+                // otherwise compare with previous value to make sure the new value is different
             }
-            return true;
+        } else {
+            this.value = newValue;
         }
-        return false;
+
+        if (autoRefresh) {
+            const dirty = digest(this);
+            // TODO do we still need this?
+            dirty.push(this);
+            flush(dirty);
+        }
+        return true;
     }
 
     refresh = refresh
@@ -374,6 +381,9 @@ export class ListItem<T> extends Value<T> {
     }
 
     update = (newValue: T, autoRefresh: boolean = true) => {
+        if (newValue === undefined)
+            return false;
+
         const { value } = this;
 
         if (value === newValue) {
@@ -391,3 +401,81 @@ export class ListItem<T> extends Value<T> {
         return true;
     }
 }
+
+
+type llllll<T> = T extends IExpression<infer U> ? U : T;
+export type UnpackSubscribables<T> = { [K in keyof T]: Exclude<T[K], IExpression<any>> | llllll<Extract<T[K], IExpression<any>>> }
+
+export function combine<T extends any[]>(expressions: T) {
+    type U = UnpackSubscribables<T>;
+    return {
+        subscribe(observer: PartialObserver<U> | Action<U>) {
+            const state = new Array(expressions.length) as U;
+            const subscriptions: Unsubscribable[] = [];
+
+            for(let i=0 ; i<expressions.length ; i++) {
+                const expr = expressions[i];
+                if (isSubscribable(expr)) {
+                    const subscr = expr.subscribe(v => {
+                        state[i] = v;
+                        emit();
+                    });
+                    subscriptions.push(subscr);
+                } else {
+                    state[i] = expr;
+                }
+            }
+            emit();
+
+            function emit() {
+                for(let i=0 ; i<state.length ; i++) {
+                    if (state[i] === undefined)
+                        return;
+                }
+                if (typeof observer === 'function' )
+                    observer(state);
+                else
+                    observer.next(state);
+            }
+
+            return {
+                unsubscribe() {
+                    for(let i=0 ; i<subscriptions.length ; i++) {
+                        subscriptions[i].unsubscribe();
+                    }
+                }
+            }
+        }
+    }
+}
+
+/*
+
+function toAttributeValue(value: any) {
+    if (Array.isArray(value)) {
+        const state = new Store([]);
+        const subscriptions = [];
+        for (let i = 0; i < value.length; i++) {
+            const item = value[i];
+            if (item === null || item === undefined)
+                continue;
+            if (isSubscribable(item)) {
+                const stateIndex = state.value.length;
+                subscriptions.push(
+                    item.subscribe(v => { state.update(arr => arr[stateIndex] = v) })
+                );
+            } else {
+                state.value.push(item);
+            }
+        };
+        if (subscriptions.length === 0)
+            return state.value;
+
+        return state;
+
+    } else {
+        return value;
+    }
+}
+
+ */

@@ -1,5 +1,5 @@
 export interface Subscribable<T> {
-    subscribe(observer: PartialObserver<T> | Action<T>): Unsubscribable;
+    subscribe(observer: PartialObserver<T>): Unsubscribable;
     subscribe(next?: (value: T) => void, error?: null | undefined, complete?: () => void): Unsubscribable;
 }
 
@@ -33,7 +33,7 @@ export function isObservable(o: any): o is Observable<unknown> {
 }
 
 export function isSubscribable(o: any): o is Subscribable<unknown> {
-    if (typeof o !== "object")
+    if (o === null || typeof o !== "object")
         return false;
     
     if (typeof o.subscribe !== "function")

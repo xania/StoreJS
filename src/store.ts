@@ -8,28 +8,30 @@ export type ProxyOf<T> =
         [K in keyof T]: T[K] extends Func ? T[K] : ProxyOf<T[K]>
     }
     & Observable<T>
-    & {
-        update?(value: T): boolean;
-        value: T;
-    };
+    & Updatable<T>
+    ;
 
 export interface IExpression<T> {
     value?: T;
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
-    property<K extends keyof T>(propertyName: K, freeze: true): IExpression<T[K]>;
 
     subscribe(next: (value: T) => void): Unsubscribable;
     subscribe(observer: PartialObserver<T>): Unsubscribable;
 
-    update?(value: T): boolean;
+    // update?(value: T): boolean;
     lift<U>(project: (value: T, prev?: U) => U): ValueObserver<T, U>;
     dispose();
 }
 
-export interface IProperty<T> extends IExpression<T> {
+export interface Updatable<T> {
     // name: string | number;
-    update(value: T): boolean;
+    update(value: T | Action<T>): boolean;
+    tap (action: Action<T>): boolean;
+}
+
+export interface IProperty<T> extends IExpression<T>, Updatable<T> {
+    // name: string | number;
 }
 
 const observable = typeof Symbol === 'function' && Symbol.observable || '@@observable';
@@ -52,6 +54,15 @@ abstract class Value<T> implements IExpression<T> {
 
     [observable]() {
         return this;
+    }
+
+    tap = (action: Action<T>) => {
+        const { value } = this;
+        if (value === undefined)
+            return false;
+        
+        action(this.value);
+        return true;
     }
 
     subscribe = (observer: PartialObserver<T> | Action<T>) => {
@@ -89,17 +100,14 @@ abstract class Value<T> implements IExpression<T> {
     }
 
     property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
-    property<K extends keyof T>(propertyName: K, freeze: true): IExpression<T[K]>;
-    property<K extends keyof T>(propertyName: K, freeze?: true) {
-        const prop = !freeze && this.get(propertyName);
+    property<K extends keyof T>(propertyName: K) {
+        const prop = this.get(propertyName);
         if (prop) return prop;
 
         var parentValue = this.value;
         var initValue = parentValue ? parentValue[propertyName] : void 0;
 
-        const property = freeze
-            ? new FrozenValue<T[K]>(this, initValue)
-            : new ObjectProperty<T[K]>(this, propertyName as string, initValue);
+        const property = new ObjectProperty<T[K]>(this, propertyName as string, initValue);
         this.properties.push(property as any);
         return property;
     }
@@ -114,10 +122,6 @@ abstract class Value<T> implements IExpression<T> {
             return value.toString();
     }
 
-    asProxy(): ProxyOf<T> {
-        return asProxy(this);
-    }
-
     valueOf() {
         return this.value;
     }
@@ -127,10 +131,8 @@ abstract class Value<T> implements IExpression<T> {
         return this.value;
     }
 
-    lift<U>(comparer: (newValue: T, prevValue: U) => U): ValueObserver<T, U> {
-        const p = new ValueObserver(this, comparer, comparer(this.value, undefined));
-        // const { lifters } = this;
-        // lifters.push(p as any);
+    lift<U>(valueFrom: (newValue: T, prevValue?: U) => U): ValueObserver<T, U> {
+        const p = new ValueObserver(this, valueFrom, valueFrom(this.value));
         const { properties } = this;
         properties.push(p as any);
         return p;
@@ -141,42 +143,6 @@ abstract class Value<T> implements IExpression<T> {
         var idx = properties.indexOf(this as any);
         if (idx >= 0) {
             properties.splice(idx, 1);
-        }
-    }
-}
-
-class FrozenValue<T> extends Value<T> {
-    constructor(parent: Value<any>, value: T) {
-        super(parent, value);
-    }
-
-    valueFrom() {
-        // ignore updates
-        return this.value;
-    }
-
-    dispose() {
-        super.dispose();
-
-
-        const idx = this.parent.value && this.parent.value.indexOf
-            ? this.parent.value.indexOf(this.value)
-            : -1
-            ;
-
-        if (idx >= 0) {
-            this.parent.value.splice(idx, 1);
-
-            const dirty = digest(this.parent);
-            // const dirty: Value<any>[] = [];
-            let parent = this.parent;
-            while (parent) {
-                dirty.push(parent);
-                parent = parent['parent']; //.parent;
-            }
-
-            flush(dirty);
-            // refreshStack([this.parent], dirty);
         }
     }
 }
@@ -233,6 +199,10 @@ export class ObjectProperty<T> extends Value<T> implements IProperty<T> {
             parent.update(value, false);
         }
     }
+
+    asProxy(): ProxyOf<T> {
+        return asProxy(this);
+    }
 }
 
 export class Store<T> extends Value<T> {
@@ -258,6 +228,11 @@ export class Store<T> extends Value<T> {
         }
     }
 
+
+    asProxy(): ProxyOf<T> {
+        return asProxy(this);
+    }
+    
     update = (value: T | Action<T>, autoRefresh: boolean = true) => {
         if (typeof value === 'function') {
             value.apply(null, [this.value]);
@@ -287,7 +262,7 @@ export class Store<T> extends Value<T> {
 
 }
 
-export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
+export function asProxy<T>(self: IExpression<T> & Updatable<T>): ProxyOf<T> {
     return new Proxy<any>(self, {
         get<K extends keyof T>(parent: IExpression<T>, name: K) {
             if (name === "subscribe")
@@ -314,7 +289,7 @@ export function asProxy<T>(self: IExpression<T>): ProxyOf<T> {
         return self.subscribe(observer);
     }
 
-    function update(value: T): boolean {
+    function update(value: T | Action<T>): boolean {
         return self.update(value);
     }
 }

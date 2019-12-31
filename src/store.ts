@@ -171,16 +171,16 @@ export class ObjectProperty<T> extends Value<T> implements IProperty<T> {
         return parentValue && parentValue[this.name];
     }
 
-    update = (value: T, autoRefresh: boolean = true) => {
-        if (value === this.value || value === undefined)
+    update = (newValue: T | Func<T, T | void>, autoRefresh: boolean = true) => {
+
+        if (!updateValue(this, newValue))
             return false;
-        this.value = value;
 
         var parentValue = this.parent.value;
         if (parentValue) {
-            parentValue[this.name] = value;
+            parentValue[this.name] = this.value;
         } else {
-            mergeParent(this.parent, { [this.name]: value });
+            mergeParent(this.parent, { [this.name]: this.value });
         }
 
         if (autoRefresh) {
@@ -234,27 +234,9 @@ export class Store<T> extends Value<T> {
     }
 
     update = (newValue: T | Func<T, T | void>, autoRefresh: boolean = true) => {
-        // ignore undefined
-        if (newValue === undefined)
-            return false;
 
-        const prevValue = this.value;
-        if (prevValue === newValue) {
+        if (!updateValue(this, newValue))
             return false;
-        } else if (typeof newValue === 'function') {
-            const retval = newValue.apply(null, [prevValue])
-            // when returned value is undefined 
-            if (retval !== undefined) {
-                if (retval === prevValue)
-                    return false;
-                this.value = retval;
-            } else {
-                // assume prevValue is being mutated (e.g a new item is pushed to list)
-                // otherwise compare with previous value to make sure the new value is different
-            }
-        } else {
-            this.value = newValue;
-        }
 
         if (autoRefresh) {
             const dirty = digest(this);
@@ -399,5 +381,33 @@ export class ListItem<T> extends Value<T> {
             return true;
         }
         return true;
+    }
+}
+
+
+function updateValue<T>(target: { value?: T }, newValue: T | Func<T, T | void>): boolean {
+    // ignore undefined
+    if (newValue === undefined)
+        return false;
+
+    const prevValue = target.value;
+    if (prevValue === newValue) {
+        return false;
+    } else if (typeof newValue === 'function') {
+        const retval = newValue.apply(null, [prevValue])
+        // when returned value is undefined 
+        if (retval === undefined) {
+            // assume prevValue is being mutated (e.g a new item is pushed to list)
+            return true;
+        } else {
+            // otherwise compare with previous value to make sure the new value is different
+            if (retval === prevValue)
+                return false;
+            target.value = retval;
+            return true
+        }
+    } else {
+        target.value = newValue;
+        return true
     }
 }

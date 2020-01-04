@@ -1,37 +1,16 @@
 // import bestSeq, { lcs } from "./lcs"
-import { Observable, PartialObserver, Unsubscribable, Action, Subscription, Subscribable, isSubscribable } from "./rx-abstraction";
+import { Expression, Peekable, PartialObserver, Unsubscribable, Action, Subscription, Updatable, Updater, Property } from "./observable";
 
 type Func<T, U> = (a: T) => U;
 
-export type ProxyOf<T> =
+export type ProxyOf<T> = 
     {
-        [K in keyof T]: T[K] extends ((...args: any) => any) ? T[K] : ProxyOf<T[K]>
+        [K in keyof T]: T[K] extends ((...args: any) => any) ? T[K] : ProxyOf<T[K]>;
     }
-    & Observable<T>
-    & Updatable<T>
-    ;
+    & State<T>
+    & Expression<T>;
 
-export interface IExpression<T> {
-    value?: T;
-
-    property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
-
-    subscribe(next: (value: T) => void): Unsubscribable;
-    subscribe(observer: PartialObserver<T>): Unsubscribable;
-
-    // update?(value: T): boolean;
-    lift<U>(project: (value: T, prev?: U) => U): IExpression<U>;
-    dispose();
-}
-
-export interface Updatable<T> {
-    // name: string | number;
-    update(value: T | Func<T, T | void>): boolean;
-    tap(action: Action<T>): boolean;
-}
-
-export interface IProperty<T> extends IExpression<T>, Updatable<T> {
-    // name: string | number;
+export interface State<T> extends Updatable<T>, Peekable<T> {
 }
 
 const observable = typeof Symbol === 'function' && Symbol.observable || '@@observable';
@@ -40,34 +19,31 @@ const empty = "";
 
 interface Parent<T> {
     value?: T;
-    properties?: IExpression<T[keyof T]>[];
+    properties?: Expression<T[keyof T]>[];
 }
 
-abstract class Value<T> implements IExpression<T> {
+abstract class Value<T> implements Expression<T> {
 
-    public properties: IExpression<T[keyof T]>[] = [];
+    public properties: Expression<T[keyof T]>[] = [];
     //     public lifters: IExpression<T[keyof T]>[] = [];
     public observers: PartialObserver<T>[];
     // public iterators: Iterator<T>[] = [];
 
     constructor(public parent: Parent<any>, public value?: T) { }
 
-    [observable]() {
-        return this;
-    }
+    [observable]() { return this; }
 
-    tap = (action: Action<T>) => {
+    peek = <U>(action: Func<T, U>) => {
         const { value } = this;
         if (value === undefined)
-            return false;
+            return undefined;
 
-        action(this.value);
-        return true;
+        return action(this.value);
     }
 
     subscribe = (observer: PartialObserver<T> | Action<T>) => {
         if (typeof observer === "function") {
-            return this.subscribe({ next: observer });
+            return this.subscribe({ next: observer }) as Unsubscribable;
         }
 
         observer.next(this.value);
@@ -88,7 +64,7 @@ abstract class Value<T> implements IExpression<T> {
         } as Unsubscribable
     }
 
-    get<K extends keyof T>(propertyName: K): IProperty<T[K]> {
+    get<K extends keyof T>(propertyName: K): Property<T[K]> {
         const { properties } = this;
         let i = properties.length;
         while (i--) {
@@ -99,7 +75,7 @@ abstract class Value<T> implements IExpression<T> {
         }
     }
 
-    property<K extends keyof T>(propertyName: K): IProperty<T[K]>;
+    property<K extends keyof T>(propertyName: K): Property<T[K]>;
     property<K extends keyof T>(propertyName: K) {
         const prop = this.get(propertyName);
         if (prop) return prop;
@@ -162,7 +138,7 @@ type NextArrayMutationsObserver<T> = {
     next: ArrayMutationsCallback<T>;
 };
 
-export class ObjectProperty<T> extends Value<T> implements IProperty<T> {
+export class ObjectProperty<T> extends Value<T> implements Property<T> {
     constructor(parent: Parent<any>, public name: string | number, value?: T) {
         super(parent, value);
     }
@@ -171,8 +147,7 @@ export class ObjectProperty<T> extends Value<T> implements IProperty<T> {
         return parentValue && parentValue[this.name];
     }
 
-    update = (newValue: T | Func<T, T | void>, autoRefresh: boolean = true) => {
-
+    update = (newValue: Updater<T>, autoRefresh: boolean = true) => {
         if (!updateValue(this, newValue))
             return false;
 
@@ -233,8 +208,7 @@ export class Store<T> extends Value<T> {
         return asProxy(this);
     }
 
-    update = (newValue: T | Func<T, T | void>, autoRefresh: boolean = true) => {
-
+    update = (newValue: Updater<T>, autoRefresh: boolean = true) => {
         if (!updateValue(this, newValue))
             return false;
 
@@ -251,9 +225,9 @@ export class Store<T> extends Value<T> {
 
 }
 
-export function asProxy<T>(self: IExpression<T> & Updatable<T>): ProxyOf<T> {
+export function asProxy<T>(self: Expression<T> & State<T>): ProxyOf<T> {
     return new Proxy<any>(self, {
-        get<K extends keyof T>(parent: IExpression<T>, name: K) {
+        get<K extends keyof T>(parent: Expression<T>, name: K) {
             if (name === "subscribe")
                 return subscribe;
             if (name === "update")
@@ -268,7 +242,7 @@ export function asProxy<T>(self: IExpression<T> & Updatable<T>): ProxyOf<T> {
 
             return asProxy(result);
         },
-        set<K extends keyof T>(parent: Value<T>, name: K, value: T[K]) {
+        set<K extends keyof T>(parent: Value<T>, name: K, value: Updater<T[K]>) {
             return parent.property(name).update(value);
         },
 
@@ -278,7 +252,7 @@ export function asProxy<T>(self: IExpression<T> & Updatable<T>): ProxyOf<T> {
         return self.subscribe(observer);
     }
 
-    function update(value: T | Action<T>): boolean {
+    function update(value: Updater<T>): boolean {
         return self.update(value);
     }
 }
@@ -355,24 +329,23 @@ function flush(dirty: any[]) {
     }
 }
 
+export {
+    bla,
+    ListItem
+};
 
-
-export class ListItem<T> extends Value<T> {
+function bla() {
+    console.log('bla');
+}
+class ListItem<T> extends Value<T> {
     constructor(public value: T, public index: number) {
         super(null, value);
     }
 
-    update = (newValue: T, autoRefresh: boolean = true) => {
-        if (newValue === undefined)
-            return false;
-
-        const { value } = this;
-
-        if (value === newValue) {
+    update = (newValue: T | Func<T, void | T>, autoRefresh: boolean = true) => {
+        if (!updateValue(this, newValue)) {
             return false;
         }
-
-        this.value = newValue;
 
         if (autoRefresh) {
             const dirty = digest(this);
@@ -384,8 +357,7 @@ export class ListItem<T> extends Value<T> {
     }
 }
 
-
-function updateValue<T>(target: { value?: T }, newValue: T | Func<T, T | void>): boolean {
+function updateValue<T>(target: { value?: T }, newValue: Updater<T>): boolean {
     // ignore undefined
     if (newValue === undefined)
         return false;

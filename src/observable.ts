@@ -3,10 +3,25 @@ export interface Subscribable<T> {
     subscribe(next?: (value: T) => void, error?: null | undefined, complete?: () => void): Unsubscribable;
 }
 
-export interface Observable<T> extends Subscribable<T> { 
-    lift<R>(operator: Operator<T, R>): Observable<R>;
+export interface Peekable<T> {
+    peek<U>(project: (value: T) => U): U;
 }
-export interface Unsubscribable { unsubscribe(): any }
+
+export type Updater<T> = T | ((a: T) => void | T)
+
+export interface Updatable<T> extends Peekable<T> {
+    update(value: Updater<T>): boolean;
+}
+
+export interface Property<T> extends Expression<T>, Updatable<T> {}
+
+export interface Expression<T> extends Subscribable<T>, Peekable<T> { 
+    property<K extends keyof T>(propertyName: K): Property<T[K]>;
+    lift<U>(project: (value: T, prev?: U) => U): Expression<U>;
+    dispose();
+}
+
+export interface Unsubscribable { unsubscribe(): void }
 
 export type Action<T> = (value: T) => void;
 export type Subscription = Unsubscribable;
@@ -18,11 +33,11 @@ export interface PartialObserver<T> {
     complete?: () => void;
 }
 
-interface Operator<T, R> {
-    (source: T): R;
+interface Operator<T, U> {
+    (source: T): U;
 }
 
-export function isObservable(o: any): o is Observable<unknown> {
+export function isObservable(o: any): o is Expression<unknown> {
     if (typeof o !== "object")
         return false;
     

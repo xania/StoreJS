@@ -1,5 +1,5 @@
 import Store from "../src/store";
-import diff from "../src/diff";
+// import diff from "../src/diff";
 
 // interface Person {
 //   firstName: string,
@@ -38,7 +38,7 @@ import diff from "../src/diff";
 describe("Filter function", () => {
     test("it should filter by a search term (link)", () => {
         // actual test
-        diff(null, null);
+        // diff(null, null);
         expect(false).toBeFalsy();
     });
 });

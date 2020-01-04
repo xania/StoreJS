@@ -1,11 +1,11 @@
-import { IExpression } from "./store";
-import { PartialObserver, Action, Unsubscribable, isSubscribable } from "./rx-abstraction";
+import { Expression } from "./observable";
+import { PartialObserver, Action, Unsubscribable, isSubscribable } from "./observable";
 
 
-type llllll<T> = T extends IExpression<infer U> ? U : T;
-export type UnpackSubscribables<T> = { [K in keyof T]: Exclude<T[K], IExpression<any>> | llllll<Extract<T[K], IExpression<any>>> }
+type ExpressionType<T> = T extends Expression<infer U> ? U : T;
+export type UnpackSubscribables<T> = { [K in keyof T]: Exclude<T[K], Expression<any>> | ExpressionType<Extract<T[K], Expression<any>>> }
 
-export function join<T extends any[]>(expressions: T) {
+export function combineLatest<T extends any[]>(expressions: T) {
     type U = UnpackSubscribables<T>;
     return {
         subscribe(observer: PartialObserver<U> | Action<U>) {

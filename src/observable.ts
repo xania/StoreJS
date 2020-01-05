@@ -33,11 +33,7 @@ export interface PartialObserver<T> {
     complete?: () => void;
 }
 
-interface Operator<T, U> {
-    (source: T): U;
-}
-
-export function isObservable(o: any): o is Expression<unknown> {
+export function isExpression(o: any): o is Expression<unknown> {
     if (typeof o !== "object")
         return false;
     
@@ -56,3 +52,11 @@ export function isSubscribable(o: any): o is Subscribable<unknown> {
     
     return true;
 }
+
+export type State<T> = 
+    {
+        [K in keyof T]: T[K] extends ((...args: any) => any) ? T[K] : State<T[K]>;
+    }
+    & Updatable<T>
+    & Expression<T>;
+

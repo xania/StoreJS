@@ -1,17 +1,7 @@
 // import bestSeq, { lcs } from "./lcs"
-import { Expression, Peekable, PartialObserver, Unsubscribable, Action, Subscription, Updatable, Updater, Property } from "./observable";
+import { Expression, PartialObserver, Unsubscribable, Action, Subscription, Updatable, Updater, Property, State } from "./observable";
 
 type Func<T, U> = (a: T) => U;
-
-export type ProxyOf<T> = 
-    {
-        [K in keyof T]: T[K] extends ((...args: any) => any) ? T[K] : ProxyOf<T[K]>;
-    }
-    & State<T>
-    & Expression<T>;
-
-export interface State<T> extends Updatable<T>, Peekable<T> {
-}
 
 const observable = typeof Symbol === 'function' && Symbol.observable || '@@observable';
 
@@ -175,7 +165,7 @@ export class ObjectProperty<T> extends Value<T> implements Property<T> {
         }
     }
 
-    asProxy(): ProxyOf<T> {
+    asProxy(): State<T> {
         return asProxy(this);
     }
 }
@@ -204,7 +194,7 @@ export class Store<T> extends Value<T> {
     }
 
 
-    asProxy(): ProxyOf<T> {
+    asProxy(): State<T> {
         return asProxy(this);
     }
 
@@ -225,13 +215,13 @@ export class Store<T> extends Value<T> {
 
 }
 
-export function asProxy<T>(self: Expression<T> & State<T>): ProxyOf<T> {
+export function asProxy<T>(self: Expression<T> & Updatable<T>): State<T> {
     return new Proxy<any>(self, {
         get<K extends keyof T>(parent: Expression<T>, name: K) {
-            if (name === "subscribe")
-                return subscribe;
-            if (name === "update")
-                return update;
+            // if (name === "subscribe")
+            //     return subscribe;
+            // if (name === "update")
+            //     return update;
 
             if (typeof name === "symbol" || name in self)
                 return (self as any)[name];
@@ -248,13 +238,13 @@ export function asProxy<T>(self: Expression<T> & State<T>): ProxyOf<T> {
 
     });
 
-    function subscribe(observer): Unsubscribable {
-        return self.subscribe(observer);
-    }
+    // function subscribe(observer): Unsubscribable {
+    //     return self.subscribe(observer);
+    // }
 
-    function update(value: Updater<T>): boolean {
-        return self.update(value);
-    }
+    // function update(value: Updater<T>): boolean {
+    //     return self.update(value);
+    // }
 }
 
 export default Store;

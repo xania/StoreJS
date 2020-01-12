@@ -12,12 +12,14 @@ export function combineLatest<T extends any[]>(expressions: T) {
             const state = new Array(expressions.length) as U;
             const subscriptions: Unsubscribable[] = [];
 
-            for(let i=0 ; i<expressions.length ; i++) {
+            for (let i = 0; i < expressions.length; i++) {
                 const expr = expressions[i];
                 if (isSubscribable(expr)) {
                     const subscr = expr.subscribe(v => {
-                        state[i] = v;
-                        emit();
+                        if (state[i] !== v) {
+                            state[i] = v;
+                            emit();
+                        }
                     });
                     subscriptions.push(subscr);
                 } else {
@@ -27,11 +29,7 @@ export function combineLatest<T extends any[]>(expressions: T) {
             emit();
 
             function emit() {
-                for(let i=0 ; i<state.length ; i++) {
-                    if (state[i] === undefined)
-                        return;
-                }
-                if (typeof observer === 'function' )
+                if (typeof observer === 'function')
                     observer(state);
                 else
                     observer.next(state);
@@ -39,7 +37,7 @@ export function combineLatest<T extends any[]>(expressions: T) {
 
             return {
                 unsubscribe() {
-                    for(let i=0 ; i<subscriptions.length ; i++) {
+                    for (let i = 0; i < subscriptions.length; i++) {
                         subscriptions[i].unsubscribe();
                     }
                 }

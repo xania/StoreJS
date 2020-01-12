@@ -1,5 +1,5 @@
 // import bestSeq, { lcs } from "./lcs"
-import { Expression, PartialObserver, Unsubscribable, Action, Subscription, Updatable, Updater, Property, State } from "./observable";
+import { Expression, PartialObserver, Unsubscribable, Action, Subscription, Updatable, Updater, Property, State, isNextObserver } from "./observable";
 
 type Func<T, U> = (a: T) => U;
 
@@ -23,18 +23,21 @@ abstract class Value<T> implements Expression<T> {
 
     [observable]() { return this; }
 
-    peek = <U>(action: Func<T, U>) => {
+    peek = <U>(project: Func<T, U>) => {
         const { value } = this;
         if (value === undefined)
             return undefined;
 
-        return action(this.value);
+        return project(value);
     }
 
     subscribe = (observer: PartialObserver<T> | Action<T>) => {
         if (typeof observer === "function") {
             return this.subscribe({ next: observer }) as Unsubscribable;
         }
+
+        if (!isNextObserver(observer))
+            return;
 
         observer.next(this.value);
 

@@ -63,10 +63,14 @@ export function isSubscribable(o: any): o is Subscribable<unknown> {
     return true;
 }
 
-export type State<T> = 
+export type StateView<T> =
     {
         [K in keyof T]: T[K] extends ((...args: any) => any) ? T[K] : State<T[K]>;
     }
+    & Expression<T>;
+
+export type State<T> = 
+    StateView<T>
     & Updatable<T>
     & Expression<T>;
 

@@ -140,8 +140,8 @@ export class ObjectProperty<T> extends Value<T> implements Property<T> {
         return parentValue && parentValue[this.name];
     }
 
-    update = (newValue: Updater<T>, autoRefresh: boolean = true) => {
-        if (!updateValue(this, newValue))
+    update = (updater: Updater<T>, autoRefresh: boolean = true) => {
+        if (!updateValue(this, updater))
             return false;
 
         var parentValue = this.parent.value;
@@ -218,7 +218,7 @@ export class Store<T> extends Value<T> {
 
 }
 
-export function asProxy<T>(self: Expression<T> & Updatable<T>): State<T> {
+export function asProxy<T>(self: Expression<T>): State<T> {
     return new Proxy<any>(self, {
         get<K extends keyof T>(parent: Expression<T>, name: K) {
             // if (name === "subscribe")
@@ -304,7 +304,7 @@ export function digest(root: { properties?, value?}): any[] {
 }
 
 // TODO refactor / merge with refreshStack
-function flush(dirty: any[]) {
+export function flush(dirty: any[]) {
     var listLength: number = dirty.length;
 
     while (listLength--) {

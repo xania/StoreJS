@@ -323,13 +323,9 @@ export function flush(dirty: any[]) {
 }
 
 export {
-    bla,
     ListItem
 };
 
-function bla() {
-    console.log('bla');
-}
 class ListItem<T> extends Value<T> {
     constructor(public value: T, public index: number) {
         super(null, value);

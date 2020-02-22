@@ -214,18 +214,17 @@ export class Store<T> extends Value<T> {
         return true;
     }
 
-    refresh = refresh
+    refresh = refresh;
+
+    next(values: T) {
+        this.update(values);
+    }
 
 }
 
 export function asProxy<T>(self: Expression<T>): State<T> {
     return new Proxy<any>(self, {
         get<K extends keyof T>(parent: Expression<T>, name: K) {
-            // if (name === "subscribe")
-            //     return subscribe;
-            // if (name === "update")
-            //     return update;
-
             if (typeof name === "symbol" || name in self)
                 return (self as any)[name];
 

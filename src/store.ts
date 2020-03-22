@@ -201,9 +201,10 @@ export class Store<T> extends Value<T> {
         return asProxy(this);
     }
 
-    update = (newValue: Updater<T>, autoRefresh: boolean = true) => {
-        if (!updateValue(this, newValue))
+    update = (newValue: Updater<T>, autoRefresh: boolean = true, partial?: boolean) => {
+        if (!updateValue(this, newValue, partial)) {
             return false;
+        }
 
         if (autoRefresh) {
             const dirty = digest(this);
@@ -345,16 +346,16 @@ class ListItem<T> extends Value<T> {
     }
 }
 
-function updateValue<T>(target: { value?: T }, newValue: Updater<T>): boolean {
+export function updateValue<T>(target: { value?: T }, newValue: Updater<T>, partial?: boolean): boolean {
     // ignore undefined
     if (newValue === undefined)
         return false;
 
-    const prevValue = target.value;
-    if (prevValue === newValue) {
+    const targetValue = target.value;
+    if (targetValue === newValue) {
         return false;
     } else if (typeof newValue === 'function') {
-        const retval = newValue.apply(null, [prevValue])
+        const retval = newValue.apply(null, [targetValue])
         // when returned value is undefined 
         if (retval === undefined) {
             // assume prevValue is being mutated (e.g a new item is pushed to list)
@@ -362,6 +363,34 @@ function updateValue<T>(target: { value?: T }, newValue: Updater<T>): boolean {
         } else {
             return updateValue(target, retval);
         }
+    } else if (partial === true && !!targetValue && typeof targetValue === "object" && !!newValue && typeof newValue === "object") {
+        let b = false;
+        const stack: any[] = [
+            [targetValue, newValue]
+        ]
+        const merged = new Set<any>();
+        while (stack.length > 0) {
+            const [targetValue, sourceValue] = stack.pop();
+            if (!merged.add(targetValue))
+                // stop recursion
+                continue;
+
+            for (let prop in sourceValue) {
+                const sourcePropValue = sourceValue[prop];
+                const targetPropValue = targetValue[prop];
+                if (sourcePropValue === targetPropValue || typeof targetPropValue === "function")
+                    continue;
+                if (targetPropValue && typeof targetPropValue === "object" && sourcePropValue && typeof sourcePropValue === "object") {
+                    stack.push([targetPropValue, sourcePropValue])
+                } else {
+                    if (targetPropValue !== sourcePropValue) {
+                        targetValue[prop] = sourcePropValue;
+                        b = true;
+                    }
+                }
+            }
+        }
+        return b;
     } else {
         target.value = newValue;
         return true

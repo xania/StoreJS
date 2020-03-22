@@ -360,11 +360,7 @@ function updateValue<T>(target: { value?: T }, newValue: Updater<T>): boolean {
             // assume prevValue is being mutated (e.g a new item is pushed to list)
             return true;
         } else {
-            // otherwise compare with previous value to make sure the new value is different
-            if (retval === prevValue)
-                return false;
-            target.value = retval;
-            return true
+            return updateValue(target, retval);
         }
     } else {
         target.value = newValue;

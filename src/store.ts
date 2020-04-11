@@ -31,15 +31,17 @@ abstract class Value<T> implements Expression<T> {
         return project(value);
     }
 
-    subscribe = (observer: PartialObserver<T> | Action<T>) => {
+    subscribe = (observer: PartialObserver<T> | Action<T>, skipCurrent: boolean = false) => {
         if (typeof observer === "function") {
-            return this.subscribe({ next: observer }) as Unsubscribable;
+            return this.subscribe({ next: observer }, skipCurrent) as Unsubscribable;
         }
 
         if (!isNextObserver(observer))
             return;
 
-        observer.next(this.value);
+        if (!skipCurrent) {
+            observer.next(this.value);
+        }
 
         var observers = this.observers;
         if (observers) {

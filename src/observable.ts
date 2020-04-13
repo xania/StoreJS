@@ -15,7 +15,7 @@ export interface Updatable<T> extends Peekable<T> {
 
 export interface Property<T> extends Expression<T>, Updatable<T> {}
 
-export interface Expression<T> extends Subscribable<T>, Peekable<T>, Liftable<T> { 
+export interface Expression<T = unknown> extends Subscribable<T>, Peekable<T>, Liftable<T> { 
     property<K extends keyof T>(propertyName: K): Property<T[K]>;
     dispose();
 }

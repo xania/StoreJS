@@ -31,9 +31,9 @@ abstract class Value<T> implements Expression<T> {
         return project(value);
     }
 
-    subscribe = (observer: PartialObserver<T> | Action<T>, skipCurrent: boolean = false) => {
+    onChange = (observer: PartialObserver<T> | Action<T>, skipCurrent: boolean) => {
         if (typeof observer === "function") {
-            return this.subscribe({ next: observer }, skipCurrent) as Unsubscribable;
+            return this.onChange({ next: observer }, skipCurrent) as Unsubscribable;
         }
 
         if (!isNextObserver(observer))
@@ -57,6 +57,10 @@ abstract class Value<T> implements Expression<T> {
                 observers.splice(idx, 1);
             }
         } as Unsubscribable
+    }
+
+    subscribe = (observer: PartialObserver<T> | Action<T>) => {
+        return this.onChange(observer, false);
     }
 
     get<K extends keyof T>(propertyName: K): Property<T[K]> {
